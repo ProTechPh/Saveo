@@ -56,27 +56,6 @@ def root():
 def health():
     return {"status": "ok"}
 
-@app.get("/api/debug_raw")
-def debug_raw(url: str = Query(...)):
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "extract_flat": False,
-        "format": "all",
-        "ignore_no_formats_error": True,
-    }
-    if get_cookie_path():
-        opts["cookiefile"] = get_cookie_path()
-
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return {
-            "all_format_ids": [f.get("format_id") for f in info.get("formats", [])],
-            "all_exts": list(set(f.get("ext") for f in info.get("formats", []))),
-            "sample_format_0": info.get("formats", [])[0] if info.get("formats") else None,
-        }
-
 def sanitize_filename(name: str) -> str:
     invalid = '<>:"/\\|?*'
     for c in invalid:
@@ -107,7 +86,7 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
 
             formats_list = []
 
-            # Standard video resolutions: 1080p, 720p, 480p, 360p
+            # 1080p, 720p, 480p, 360p
             video_resolutions = [
                 (1080, "1080p Full HD", "Full HD video"),
                 (720, "720p HD", "High Definition video"),
@@ -127,7 +106,7 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
                     "mime": "video/mp4",
                 })
 
-            # Audio MP3 format
+            # Audio MP3
             formats_list.append({
                 "id": "bestaudio",
                 "label": "Audio (MP3)",
