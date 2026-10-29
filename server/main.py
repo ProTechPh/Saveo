@@ -73,19 +73,23 @@ def version_info():
 
 @app.get("/api/debug_raw")
 def debug_raw(url: str = Query(...)):
-    opts = get_base_ydl_opts()
-    opts.update({
-        "skip_download": True,
-        "extract_flat": False,
-        "format": "all",
-        "ignore_no_formats_error": True,
-    })
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return {
-            "all_format_ids": [f.get("format_id") for f in info.get("formats", [])],
-            "all_exts": list(set(f.get("ext") for f in info.get("formats", []))),
-        }
+    try:
+        opts = get_base_ydl_opts()
+        opts.update({
+            "skip_download": True,
+            "extract_flat": False,
+            "format": "all",
+            "ignore_no_formats_error": True,
+        })
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            return {
+                "all_format_ids": [f.get("format_id") for f in info.get("formats", [])],
+                "all_exts": list(set(f.get("ext") for f in info.get("formats", []))),
+            }
+    except Exception as e:
+        import traceback
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 def sanitize_filename(name: str) -> str:
     invalid = '<>:"/\\|?*'
