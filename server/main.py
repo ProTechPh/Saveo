@@ -5,12 +5,12 @@ import urllib.parse
 from typing import Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 import yt_dlp
 
 app = FastAPI(title="Saveo API", version="1.0.0")
 
-# Enable CORS for Vercel and local development
+# Enable CORS for Vercel and all origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,6 +20,31 @@ app.add_middleware(
     expose_headers=["Content-Length", "Content-Disposition", "Content-Type"],
 )
 
+COOKIE_FILE = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
+raw_cookies = os.environ.get("YOUTUBE_COOKIES", "").strip()
+if raw_cookies:
+    with open(COOKIE_FILE, "w", encoding="utf-8") as f:
+        f.write(raw_cookies)
+
+def get_base_ydl_opts():
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["ios", "android", "mweb"]
+            }
+        },
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+    }
+    if os.path.exists(COOKIE_FILE) and os.path.getsize(COOKIE_FILE) > 0:
+        opts["cookiefile"] = COOKIE_FILE
+    return opts
+
 @app.get("/")
 def root():
     return {"status": "ok", "service": "Saveo Downloader API"}
@@ -28,22 +53,21 @@ def root():
 def health():
     return {"status": "ok"}
 
-def get_ydl_opts(extra=None):
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "extract_flat": False,
-        "noplaylist": True,
-    }
-    if extra:
-        opts.update(extra)
-    return opts
+def sanitize_filename(name: str) -> str:
+    invalid = '<>:"/\\|?*'
+    for c in invalid:
+        name = name.replace(c, "-")
+    return name[:120].strip()
 
 @app.get("/api/extract")
 def extract_media(url: str = Query(..., description="Media URL to analyze")):
     try:
-        ydl_opts = get_ydl_opts()
+        ydl_opts = get_base_ydl_opts()
+        ydl_opts.update({
+            "skip_download": True,
+            "extract_flat": False,
+        })
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             if not info:
@@ -58,15 +82,11 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
             formats_list = []
             raw_formats = info.get("formats", [])
 
-            # Filter and collect video and audio formats
-            # Common desired targets: best, 1080p, 720p, 480p, 360p, audio-only
-            heights_seen = set()
-
-            # First add MP3 / Audio format
+            # Audio format
             formats_list.append({
                 "id": "bestaudio",
-                "label": "Audio (MP3 / M4A)",
-                "note": "Audio only",
+                "label": "Audio (MP3)",
+                "note": "192kbps MP3",
                 "kind": "audio",
                 "url": f"/api/download?url={urllib.parse.quote(url)}&format_id=bestaudio",
                 "filename": f"{sanitize_filename(title)}.mp3",
@@ -74,7 +94,8 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
                 "mime": "audio/mp3",
             })
 
-            # Check video formats
+            # Video formats
+            heights_seen = set()
             for f in sorted(raw_formats, key=lambda x: (x.get("height") or 0, x.get("tbr") or 0), reverse=True):
                 h = f.get("height")
                 vcodec = f.get("vcodec", "none")
@@ -96,7 +117,6 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
                     "mime": "video/mp4",
                 })
 
-            # If no standard height matched, add "best" video
             if not any(f["kind"] == "video" for f in formats_list):
                 formats_list.append({
                     "id": "best",
@@ -123,13 +143,8 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
             }
 
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-def sanitize_filename(name: str) -> str:
-    invalid = '<>:"/\\|?*'
-    for c in invalid:
-        name = name.replace(c, "-")
-    return name[:120].strip()
+        err_msg = str(e)
+        raise HTTPException(status_code=400, detail=err_msg)
 
 @app.get("/api/download")
 def download_media(
@@ -139,12 +154,10 @@ def download_media(
     tmpdir = tempfile.mkdtemp(prefix="saveo_")
     try:
         out_template = os.path.join(tmpdir, "%(title)s.%(ext)s")
-        ydl_opts = {
+        ydl_opts = get_base_ydl_opts()
+        ydl_opts.update({
             "outtmpl": out_template,
-            "quiet": True,
-            "no_warnings": True,
-            "noplaylist": True,
-        }
+        })
 
         if format_id == "bestaudio":
             ydl_opts["format"] = "bestaudio/best"
@@ -165,7 +178,6 @@ def download_media(
             info = ydl.extract_info(url, download=True)
             title = sanitize_filename(info.get("title") or "download")
 
-        # Find downloaded file in tmpdir
         downloaded_files = os.listdir(tmpdir)
         if not downloaded_files:
             raise HTTPException(status_code=500, detail="File download failed on server")
@@ -178,7 +190,7 @@ def download_media(
         def iterfile():
             try:
                 with open(file_path, mode="rb") as f:
-                    while chunk := f.read(1024 * 1024):  # 1MB chunks
+                    while chunk := f.read(1024 * 1024):
                         yield chunk
             finally:
                 shutil.rmtree(tmpdir, ignore_errors=True)

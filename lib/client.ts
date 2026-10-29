@@ -226,8 +226,15 @@ export async function extract(input: string): Promise<ExtractResult> {
           }));
           return data;
         }
+      } else {
+        const errJson = await res.json().catch(() => null);
+        const detail = errJson?.detail || "Backend server failed to extract media.";
+        throw new Error(detail);
       }
     } catch (e) {
+      if (e instanceof Error && e.message && !e.message.includes("Failed to fetch")) {
+        throw e;
+      }
       console.warn("Backend extraction failed, falling back to local detection", e);
     }
   }
