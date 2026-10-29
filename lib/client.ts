@@ -11,6 +11,7 @@ import type { ExtractNotice, ExtractResult, MediaInfo, SaveProgress } from "@/li
  */
 
 const SERVER_SITES = ["YouTube", "Instagram", "TikTok", "X", "Facebook", "Twitch", "Vimeo"];
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 
 type Platform = {
   name: string;
@@ -212,7 +213,26 @@ export async function extract(input: string): Promise<ExtractResult> {
   const host = url.hostname.toLowerCase();
   const platform = PLATFORMS.find((entry) => entry.match.test(host));
 
-  // 1. Streaming sites: metadata if we can get it, then a truthful notice.
+  // 1. If backend API is configured, use it for streaming sites (or any video url)
+  if (API_BASE && platform) {
+    try {
+      const res = await fetch(`${API_BASE}/api/extract?url=${encodeURIComponent(url.toString())}`);
+      if (res.ok) {
+        const data: ExtractResult = await res.json();
+        if (data.formats && data.formats.length > 0) {
+          data.formats = data.formats.map((fmt) => ({
+            ...fmt,
+            url: fmt.url.startsWith("http") ? fmt.url : `${API_BASE}${fmt.url}`,
+          }));
+          return data;
+        }
+      }
+    } catch (e) {
+      console.warn("Backend extraction failed, falling back to local detection", e);
+    }
+  }
+
+  // Streaming sites fallback notice if no backend configured
   if (platform) {
     const media = baseMedia(url, platform.name);
     if (platform.oembed) {
