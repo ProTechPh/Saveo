@@ -69,7 +69,8 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
         ydl_opts.update({
             "skip_download": True,
             "extract_flat": False,
-            "format": "bestvideo+bestaudio/best",
+            "format": "all",
+            "ignore_no_formats_error": True,
         })
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -84,50 +85,23 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
             extractor = info.get("extractor_key") or "Media"
 
             formats_list = []
-            raw_formats = info.get("formats", [])
 
-            # Video resolutions (e.g. 1080p, 720p, 480p, 360p)
-            heights_seen = set()
-            for f in sorted(raw_formats, key=lambda x: (x.get("height") or 0, x.get("tbr") or 0), reverse=True):
-                h = f.get("height")
-                vcodec = f.get("vcodec") or "none"
-                if not h or vcodec == "none" or h in heights_seen:
-                    continue
-                if h < 240:
-                    continue
-                heights_seen.add(h)
+            # Standard video resolutions: 1080p, 720p, 480p, 360p
+            video_resolutions = [
+                (1080, "1080p Full HD", "Full HD video"),
+                (720, "720p HD", "High Definition video"),
+                (480, "480p SD", "Standard video"),
+                (360, "360p Medium", "Data-saver video"),
+            ]
 
-                if h >= 2160:
-                    label = f"4K ({h}p)"
-                elif h >= 1440:
-                    label = f"2K ({h}p)"
-                elif h >= 1080:
-                    label = f"1080p Full HD"
-                elif h >= 720:
-                    label = f"720p HD"
-                else:
-                    label = f"{h}p MP4"
-
-                filesize = f.get("filesize") or f.get("filesize_approx")
+            for res_h, res_label, res_note in video_resolutions:
                 formats_list.append({
-                    "id": f"video_{h}",
-                    "label": label,
-                    "note": f"Video ({h}p)",
+                    "id": f"video_{res_h}",
+                    "label": res_label,
+                    "note": res_note,
                     "kind": "video",
-                    "url": f"/api/download?url={urllib.parse.quote(url)}&format_id=video_{h}",
-                    "filename": f"{sanitize_filename(title)}-{h}p.mp4",
-                    "size": filesize,
-                    "mime": "video/mp4",
-                })
-
-            if not formats_list:
-                formats_list.append({
-                    "id": "best",
-                    "label": "Best Quality MP4",
-                    "note": "Standard video",
-                    "kind": "video",
-                    "url": f"/api/download?url={urllib.parse.quote(url)}&format_id=best",
-                    "filename": f"{sanitize_filename(title)}.mp4",
+                    "url": f"/api/download?url={urllib.parse.quote(url)}&format_id=video_{res_h}",
+                    "filename": f"{sanitize_filename(title)}-{res_h}p.mp4",
                     "size": None,
                     "mime": "video/mp4",
                 })
@@ -183,7 +157,7 @@ def download_media(
             }]
         elif format_id.startswith("video_"):
             height = format_id.split("_")[1]
-            ydl_opts["format"] = f"bestvideo[height<={height}]+bestaudio/bestvideo[height<={height}]/best[height<={height}]/best"
+            ydl_opts["format"] = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
             ydl_opts["merge_output_format"] = "mp4"
         else:
             ydl_opts["format"] = "bestvideo+bestaudio/best"
