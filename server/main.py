@@ -38,6 +38,11 @@ def get_base_ydl_opts():
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["web", "android", "mweb"]
+            }
+        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
@@ -70,8 +75,6 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
         ydl_opts.update({
             "skip_download": True,
             "extract_flat": False,
-            "format": "all",
-            "ignore_no_formats_error": True,
         })
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -88,26 +91,14 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
             formats_list = []
             raw_formats = info.get("formats", [])
 
-            # Audio format
-            formats_list.append({
-                "id": "bestaudio",
-                "label": "Audio (MP3)",
-                "note": "192kbps MP3",
-                "kind": "audio",
-                "url": f"/api/download?url={urllib.parse.quote(url)}&format_id=bestaudio",
-                "filename": f"{sanitize_filename(title)}.mp3",
-                "size": None,
-                "mime": "audio/mp3",
-            })
-
-            # Video formats
+            # Video resolutions (e.g. 1080p, 720p, 480p, 360p)
             heights_seen = set()
             for f in sorted(raw_formats, key=lambda x: (x.get("height") or 0, x.get("tbr") or 0), reverse=True):
                 h = f.get("height")
-                vcodec = f.get("vcodec", "none")
+                vcodec = f.get("vcodec") or "none"
                 if not h or vcodec == "none" or h in heights_seen:
                     continue
-                if h not in [1080, 720, 480, 360]:
+                if h not in [2160, 1440, 1080, 720, 480, 360]:
                     continue
                 heights_seen.add(h)
 
@@ -115,7 +106,7 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
                 formats_list.append({
                     "id": f"video_{h}",
                     "label": f"{h}p MP4",
-                    "note": f"Video ({h}p)",
+                    "note": f"HD Video ({h}p)" if h >= 720 else f"SD Video ({h}p)",
                     "kind": "video",
                     "url": f"/api/download?url={urllib.parse.quote(url)}&format_id=video_{h}",
                     "filename": f"{sanitize_filename(title)}-{h}p.mp4",
@@ -123,6 +114,7 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
                     "mime": "video/mp4",
                 })
 
+            # If no standard resolution matched, add best
             if not any(f["kind"] == "video" for f in formats_list):
                 formats_list.append({
                     "id": "best",
@@ -134,6 +126,18 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
                     "size": None,
                     "mime": "video/mp4",
                 })
+
+            # Audio MP3 format
+            formats_list.append({
+                "id": "bestaudio",
+                "label": "Audio (MP3)",
+                "note": "192kbps MP3",
+                "kind": "audio",
+                "url": f"/api/download?url={urllib.parse.quote(url)}&format_id=bestaudio",
+                "filename": f"{sanitize_filename(title)}.mp3",
+                "size": None,
+                "mime": "audio/mp3",
+            })
 
             return {
                 "media": {
