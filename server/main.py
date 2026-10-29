@@ -56,43 +56,26 @@ def root():
 def health():
     return {"status": "ok"}
 
-@app.get("/api/debug_list")
-def debug_list(url: str = Query(...)):
-    results = {}
-    clients_to_test = [
-        ("mweb_with_cookies", ["mweb"], True),
-        ("mweb_no_cookies", ["mweb"], False),
-        ("web_creator_with_cookies", ["web_creator"], True),
-        ("web_creator_no_cookies", ["web_creator"], False),
-        ("web_embedded_with_cookies", ["web_embedded"], True),
-        ("web_safari_with_cookies", ["web_safari"], True),
-    ]
+@app.get("/api/debug_raw")
+def debug_raw(url: str = Query(...)):
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        "extract_flat": False,
+        "format": "all",
+        "ignore_no_formats_error": True,
+    }
+    if get_cookie_path():
+        opts["cookiefile"] = get_cookie_path()
 
-    for name, clients, use_cookies in clients_to_test:
-        try:
-            opts = {
-                "quiet": True,
-                "no_warnings": True,
-                "noplaylist": True,
-                "skip_download": True,
-                "extract_flat": False,
-                "extractor_args": {"youtube": {"player_client": clients}},
-            }
-            if use_cookies and get_cookie_path():
-                opts["cookiefile"] = get_cookie_path()
-
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=False)
-                fmts = [
-                    f"{f.get('format_id')}:{f.get('height')}p:{f.get('ext')}"
-                    for f in info.get("formats", [])
-                    if f.get("vcodec") != "none" or f.get("acodec") != "none"
-                ]
-                results[name] = {"count": len(fmts), "sample": fmts[:8]}
-        except Exception as e:
-            results[name] = {"error": str(e)[:150]}
-
-    return results
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        return {
+            "all_format_ids": [f.get("format_id") for f in info.get("formats", [])],
+            "all_exts": list(set(f.get("ext") for f in info.get("formats", []))),
+            "sample_format_0": info.get("formats", [])[0] if info.get("formats") else None,
+        }
 
 def sanitize_filename(name: str) -> str:
     invalid = '<>:"/\\|?*'
