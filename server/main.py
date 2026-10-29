@@ -88,34 +88,37 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
             duration = info.get("duration") or None
             extractor = info.get("extractor_key") or "Media"
 
-            formats_list = []
             raw_formats = info.get("formats", [])
-
-            # Video resolutions (e.g. 1080p, 720p, 480p, 360p)
-            heights_seen = set()
-            for f in sorted(raw_formats, key=lambda x: (x.get("height") or 0, x.get("tbr") or 0), reverse=True):
+            max_height = info.get("height") or 1080
+            for f in raw_formats:
                 h = f.get("height")
-                vcodec = f.get("vcodec") or "none"
-                if not h or vcodec == "none" or h in heights_seen:
-                    continue
-                if h not in [2160, 1440, 1080, 720, 480, 360]:
-                    continue
-                heights_seen.add(h)
+                if h and isinstance(h, (int, float)) and h > max_height:
+                    max_height = int(h)
 
-                filesize = f.get("filesize") or f.get("filesize_approx")
-                formats_list.append({
-                    "id": f"video_{h}",
-                    "label": f"{h}p MP4",
-                    "note": f"HD Video ({h}p)" if h >= 720 else f"SD Video ({h}p)",
-                    "kind": "video",
-                    "url": f"/api/download?url={urllib.parse.quote(url)}&format_id=video_{h}",
-                    "filename": f"{sanitize_filename(title)}-{h}p.mp4",
-                    "size": filesize,
-                    "mime": "video/mp4",
-                })
+            all_resolutions = [
+                (2160, "4K (2160p)"),
+                (1440, "2K (1440p)"),
+                (1080, "1080p Full HD"),
+                (720, "720p HD"),
+                (480, "480p SD"),
+                (360, "360p"),
+            ]
 
-            # If no standard resolution matched, add best
-            if not any(f["kind"] == "video" for f in formats_list):
+            formats_list = []
+            for res_h, res_label in all_resolutions:
+                if max_height >= res_h:
+                    formats_list.append({
+                        "id": f"video_{res_h}",
+                        "label": res_label,
+                        "note": f"{res_h}p MP4",
+                        "kind": "video",
+                        "url": f"/api/download?url={urllib.parse.quote(url)}&format_id=video_{res_h}",
+                        "filename": f"{sanitize_filename(title)}-{res_h}p.mp4",
+                        "size": None,
+                        "mime": "video/mp4",
+                    })
+
+            if not formats_list:
                 formats_list.append({
                     "id": "best",
                     "label": "Best Quality MP4",
