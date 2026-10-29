@@ -11,7 +11,7 @@ import type { ExtractNotice, ExtractResult, MediaInfo, SaveProgress } from "@/li
  */
 
 const SERVER_SITES = ["YouTube", "Instagram", "TikTok", "X", "Facebook", "Twitch", "Vimeo"];
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "https://saveo-api.onrender.com").replace(/\/$/, "");
 
 type Platform = {
   name: string;
