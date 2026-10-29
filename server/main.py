@@ -20,39 +20,38 @@ app.add_middleware(
     expose_headers=["Content-Length", "Content-Disposition", "Content-Type"],
 )
 
-COOKIE_FILE = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
+LOCAL_COOKIE_FILE = os.path.join(os.path.dirname(__file__), "cookies.txt")
+TEMP_COOKIE_FILE = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
 
-def update_cookie_file():
+def get_cookie_path() -> Optional[str]:
     raw_cookies = os.environ.get("YOUTUBE_COOKIES", "").strip()
     if raw_cookies:
-        with open(COOKIE_FILE, "w", encoding="utf-8") as f:
+        with open(TEMP_COOKIE_FILE, "w", encoding="utf-8") as f:
             f.write(raw_cookies)
-
-update_cookie_file()
+        return TEMP_COOKIE_FILE
+    if os.path.exists(LOCAL_COOKIE_FILE) and os.path.getsize(LOCAL_COOKIE_FILE) > 0:
+        return LOCAL_COOKIE_FILE
+    return None
 
 def get_base_ydl_opts():
-    update_cookie_file()
     opts = {
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["tv_embedded", "android_creator", "ios", "mweb"]
-            }
-        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
-    if os.path.exists(COOKIE_FILE) and os.path.getsize(COOKIE_FILE) > 0:
-        opts["cookiefile"] = COOKIE_FILE
+    cookie_path = get_cookie_path()
+    if cookie_path:
+        opts["cookiefile"] = cookie_path
     return opts
 
 @app.get("/")
 def root():
-    return {"status": "ok", "service": "Saveo Downloader API"}
+    has_cookies = get_cookie_path() is not None
+    return {"status": "ok", "service": "Saveo Downloader API", "cookies_loaded": has_cookies}
 
 @app.get("/health")
 def health():
