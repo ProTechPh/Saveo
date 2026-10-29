@@ -21,23 +21,28 @@ app.add_middleware(
 )
 
 COOKIE_FILE = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
-raw_cookies = os.environ.get("YOUTUBE_COOKIES", "").strip()
-if raw_cookies:
-    with open(COOKIE_FILE, "w", encoding="utf-8") as f:
-        f.write(raw_cookies)
+
+def update_cookie_file():
+    raw_cookies = os.environ.get("YOUTUBE_COOKIES", "").strip()
+    if raw_cookies:
+        with open(COOKIE_FILE, "w", encoding="utf-8") as f:
+            f.write(raw_cookies)
+
+update_cookie_file()
 
 def get_base_ydl_opts():
+    update_cookie_file()
     opts = {
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["ios", "android", "mweb"]
+                "player_client": ["tv_embedded", "android_creator", "ios", "mweb"]
             }
         },
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         }
     }
