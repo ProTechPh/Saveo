@@ -39,8 +39,7 @@ def get_base_ydl_opts():
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
-        "js_runtimes": ["node"],
-        "remote_components": ["ejs:github"],
+        "js_runtimes": {"node": {}},
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
@@ -86,6 +85,10 @@ def debug_raw(url: str = Query(...)):
             return {
                 "all_format_ids": [f.get("format_id") for f in info.get("formats", [])],
                 "all_exts": list(set(f.get("ext") for f in info.get("formats", []))),
+                "sample_formats": [
+                    {"id": f.get("format_id"), "h": f.get("height"), "vcodec": f.get("vcodec"), "acodec": f.get("acodec")}
+                    for f in info.get("formats", [])[:10]
+                ]
             }
     except Exception as e:
         import traceback
