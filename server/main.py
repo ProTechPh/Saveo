@@ -56,27 +56,6 @@ def root():
 def health():
     return {"status": "ok"}
 
-@app.get("/api/debug_formats")
-def debug_formats(url: str = Query(...)):
-    ydl_opts = get_base_ydl_opts()
-    ydl_opts.update({"skip_download": True, "extract_flat": False, "format": "all", "ignore_no_formats_error": True})
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return {
-            "height": info.get("height"),
-            "formats_count": len(info.get("formats", [])),
-            "formats_sample": [
-                {
-                    "format_id": f.get("format_id"),
-                    "ext": f.get("ext"),
-                    "height": f.get("height"),
-                    "vcodec": f.get("vcodec"),
-                    "format_note": f.get("format_note"),
-                }
-                for f in info.get("formats", [])[:15]
-            ]
-        }
-
 def sanitize_filename(name: str) -> str:
     invalid = '<>:"/\\|?*'
     for c in invalid:
@@ -90,8 +69,7 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
         ydl_opts.update({
             "skip_download": True,
             "extract_flat": False,
-            "format": "all",
-            "ignore_no_formats_error": True,
+            "format": "bestvideo+bestaudio/best",
         })
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -105,39 +83,42 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
             duration = info.get("duration") or None
             extractor = info.get("extractor_key") or "Media"
 
-            raw_formats = info.get("formats", [])
-            heights_found = set()
-            for f in raw_formats:
-                h = f.get("height")
-                if h and isinstance(h, (int, float)) and h > 0:
-                    heights_found.add(int(h))
-
-            # If YouTube video, standard YouTube videos always support 1080p, 720p, 480p, 360p
-            is_youtube = "youtube" in extractor.lower() or "youtu" in url.lower()
-            max_h = max(heights_found) if heights_found else (info.get("height") or (1080 if is_youtube else 720))
-
-            all_resolutions = [
-                (2160, "4K (2160p)"),
-                (1440, "2K (1440p)"),
-                (1080, "1080p Full HD"),
-                (720, "720p HD"),
-                (480, "480p SD"),
-                (360, "360p Medium"),
-            ]
-
             formats_list = []
-            for res_h, res_label in all_resolutions:
-                if max_h >= res_h:
-                    formats_list.append({
-                        "id": f"video_{res_h}",
-                        "label": res_label,
-                        "note": f"{res_h}p MP4",
-                        "kind": "video",
-                        "url": f"/api/download?url={urllib.parse.quote(url)}&format_id=video_{res_h}",
-                        "filename": f"{sanitize_filename(title)}-{res_h}p.mp4",
-                        "size": None,
-                        "mime": "video/mp4",
-                    })
+            raw_formats = info.get("formats", [])
+
+            # Video resolutions (e.g. 1080p, 720p, 480p, 360p)
+            heights_seen = set()
+            for f in sorted(raw_formats, key=lambda x: (x.get("height") or 0, x.get("tbr") or 0), reverse=True):
+                h = f.get("height")
+                vcodec = f.get("vcodec") or "none"
+                if not h or vcodec == "none" or h in heights_seen:
+                    continue
+                if h < 240:
+                    continue
+                heights_seen.add(h)
+
+                if h >= 2160:
+                    label = f"4K ({h}p)"
+                elif h >= 1440:
+                    label = f"2K ({h}p)"
+                elif h >= 1080:
+                    label = f"1080p Full HD"
+                elif h >= 720:
+                    label = f"720p HD"
+                else:
+                    label = f"{h}p MP4"
+
+                filesize = f.get("filesize") or f.get("filesize_approx")
+                formats_list.append({
+                    "id": f"video_{h}",
+                    "label": label,
+                    "note": f"Video ({h}p)",
+                    "kind": "video",
+                    "url": f"/api/download?url={urllib.parse.quote(url)}&format_id=video_{h}",
+                    "filename": f"{sanitize_filename(title)}-{h}p.mp4",
+                    "size": filesize,
+                    "mime": "video/mp4",
+                })
 
             if not formats_list:
                 formats_list.append({
