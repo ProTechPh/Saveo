@@ -60,12 +60,12 @@ def health():
 def debug_list(url: str = Query(...)):
     results = {}
     clients_to_test = [
-        ("android_no_cookies", ["android"], False),
-        ("ios_no_cookies", ["ios"], False),
-        ("tv_no_cookies", ["tv"], False),
-        ("android_with_cookies", ["android"], True),
-        ("ios_with_cookies", ["ios"], True),
-        ("tv_embedded", ["tv_embedded"], False),
+        ("mweb_with_cookies", ["mweb"], True),
+        ("mweb_no_cookies", ["mweb"], False),
+        ("web_creator_with_cookies", ["web_creator"], True),
+        ("web_creator_no_cookies", ["web_creator"], False),
+        ("web_embedded_with_cookies", ["web_embedded"], True),
+        ("web_safari_with_cookies", ["web_safari"], True),
     ]
 
     for name, clients, use_cookies in clients_to_test:
