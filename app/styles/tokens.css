@@ -1,0 +1,100 @@
+/* ==========================================================================
+   Saveo — design tokens
+   Editorial utility: warm paper, ink, one vermillion accent.
+   Single source of truth for color, type, spacing and motion.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* Type ------------------------------------------------------------------ */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: var(--font-serif), "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Paper & ink ----------------------------------------------------------- */
+  --bg: #f2efe8;
+  --bg-2: #eae6dc;
+  --surface: #faf8f3;
+  --surface-2: #f2efe8;
+  --surface-3: #e6e1d4;
+  --line: #ddd7c8;
+  --line-strong: #b8b0a0;
+  --text: #14130f;
+  --text-2: #3f3c33;
+  --muted: #6e6859;
+
+  /* Accent ---------------------------------------------------------------- */
+  --brand: #c93d0f;
+  --brand-strong: #9e2f0a;
+  --brand-ink: #fdf8ef;
+  --brand-soft: #f7e2d7;
+  --accent: #1f6f5c;
+  --success: #2c7a4b;
+  --success-soft: #e2f0e4;
+  --danger: #b3261e;
+  --danger-soft: #f7e3e0;
+
+  /* Radii ----------------------------------------------------------------- */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+
+  /* Elevation — printed, not floating ------------------------------------- */
+  --shadow-xs: 0 1px 0 rgba(20, 19, 15, .06);
+  --shadow-sm: 0 1px 2px rgba(20, 19, 15, .05);
+  --shadow-md: 0 1px 3px rgba(20, 19, 15, .06);
+  --shadow-lg: 0 18px 40px -28px rgba(20, 19, 15, .5);
+  --shadow-xl: 0 26px 60px -36px rgba(20, 19, 15, .55);
+  --shadow-sheet: 5px 5px 0 var(--surface-3);
+  --shadow-ink: 3px 3px 0 var(--text);
+
+  /* Focus ----------------------------------------------------------------- */
+  --ring: 0 0 0 3px color-mix(in srgb, var(--brand) 20%, transparent);
+
+  /* Layout ---------------------------------------------------------------- */
+  --page: 1240px;
+  --gutter: clamp(20px, 3.4vw, 48px);
+
+  /* Motion ---------------------------------------------------------------- */
+  --ease: cubic-bezier(.2, .7, .3, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  --dur-fast: 120ms;
+  --dur: 220ms;
+  --dur-slow: 420ms;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #12110e;
+  --bg-2: #17160f;
+  --surface: #191814;
+  --surface-2: #1e1c17;
+  --surface-3: #262318;
+  --line: #2e2a21;
+  --line-strong: #4a4436;
+  --text: #f3efe4;
+  --text-2: #cbc4b4;
+  --muted: #948c7b;
+
+  --brand: #ff6a3d;
+  --brand-strong: #ff8a63;
+  --brand-ink: #1a0c05;
+  --brand-soft: #341810;
+  --accent: #7fd4b4;
+  --success: #7fd4a2;
+  --success-soft: #14291d;
+  --danger: #f08a7d;
+  --danger-soft: #2e1512;
+
+  --shadow-xs: 0 1px 0 rgba(0, 0, 0, .5);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, .5);
+  --shadow-lg: 0 20px 44px -28px rgba(0, 0, 0, .85);
+  --shadow-xl: 0 28px 64px -34px rgba(0, 0, 0, .9);
+  --shadow-sheet: 5px 5px 0 #24211a;
+  --shadow-ink: 3px 3px 0 #3a3529;
+}

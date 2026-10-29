@@ -1,0 +1,106 @@
+/* ==========================================================================
+   Content — benefits index, how-it-works columns
+   ========================================================================== */
+
+.benefits { padding-block: clamp(36px, 4.4vw, 56px) 40px; }
+
+.benefits-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.benefits-head h2 {
+  max-width: 22ch;
+  font-size: clamp(26px, 3.4vw, 40px);
+  letter-spacing: -.024em;
+}
+
+/* Numbered spec rows --------------------------------------------------------- */
+.benefit-list {
+  margin-inline: calc(var(--gutter) * -1);
+  border-top: 1px solid var(--line-strong);
+}
+
+.benefit {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 22px;
+  gap: 20px;
+  align-items: start;
+  padding: 18px var(--gutter);
+  border-bottom: 1px solid var(--line);
+  transition: background-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.benefit:hover {
+  background: var(--surface);
+  box-shadow: inset 2px 0 0 var(--brand);
+}
+
+.benefit:last-child { border-bottom: 0; }
+
+.benefit-index {
+  padding-top: 3px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  transition: color var(--dur) var(--ease);
+}
+.benefit:hover .benefit-index { color: var(--brand); }
+
+.benefit h3 { font-size: 15px; font-weight: 600; }
+
+.benefit p {
+  max-width: 76ch;
+  margin-top: 5px;
+  color: var(--text-2);
+  font-size: 13.5px;
+  line-height: 1.62;
+}
+
+.benefit-icon {
+  justify-self: end;
+  padding-top: 2px;
+  color: var(--line-strong);
+  transition: color var(--dur) var(--ease);
+}
+.benefit:hover .benefit-icon { color: var(--brand); }
+
+/* How it works --------------------------------------------------------------- */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-inline: calc(var(--gutter) * -1);
+  padding: 0 var(--gutter) clamp(48px, 5vw, 72px);
+  border-top: 1px solid var(--line-strong);
+}
+
+.step {
+  padding: 18px 28px 0 24px;
+}
+.step:first-child { padding-left: 0; }
+.step + .step { border-left: 1px solid var(--line); }
+
+.step-num {
+  display: block;
+  color: var(--brand);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .1em;
+}
+
+.step h3 {
+  margin-top: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.step p {
+  max-width: 34ch;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}

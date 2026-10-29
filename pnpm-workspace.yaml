@@ -1,0 +1,4 @@
+# Single-package workspace: the Next.js app lives at the repo root.
+# Nothing here installs a native binary, so no build scripts need approving.
+packages:
+  - .
