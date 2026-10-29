@@ -58,24 +58,41 @@ def health():
 
 @app.get("/api/debug_list")
 def debug_list(url: str = Query(...)):
-    ydl_opts = get_base_ydl_opts()
-    ydl_opts.update({"skip_download": True, "extract_flat": False, "format": "all", "ignore_no_formats_error": True})
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        return {
-            "title": info.get("title"),
-            "formats": [
-                {
-                    "format_id": f.get("format_id"),
-                    "ext": f.get("ext"),
-                    "height": f.get("height"),
-                    "vcodec": f.get("vcodec"),
-                    "acodec": f.get("acodec"),
-                    "protocol": f.get("protocol"),
-                }
-                for f in info.get("formats", [])
-            ]
-        }
+    results = {}
+    clients_to_test = [
+        ("android_no_cookies", ["android"], False),
+        ("ios_no_cookies", ["ios"], False),
+        ("tv_no_cookies", ["tv"], False),
+        ("android_with_cookies", ["android"], True),
+        ("ios_with_cookies", ["ios"], True),
+        ("tv_embedded", ["tv_embedded"], False),
+    ]
+
+    for name, clients, use_cookies in clients_to_test:
+        try:
+            opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "noplaylist": True,
+                "skip_download": True,
+                "extract_flat": False,
+                "extractor_args": {"youtube": {"player_client": clients}},
+            }
+            if use_cookies and get_cookie_path():
+                opts["cookiefile"] = get_cookie_path()
+
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                fmts = [
+                    f"{f.get('format_id')}:{f.get('height')}p:{f.get('ext')}"
+                    for f in info.get("formats", [])
+                    if f.get("vcodec") != "none" or f.get("acodec") != "none"
+                ]
+                results[name] = {"count": len(fmts), "sample": fmts[:8]}
+        except Exception as e:
+            results[name] = {"error": str(e)[:150]}
+
+    return results
 
 def sanitize_filename(name: str) -> str:
     invalid = '<>:"/\\|?*'
