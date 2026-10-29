@@ -70,6 +70,8 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
         ydl_opts.update({
             "skip_download": True,
             "extract_flat": False,
+            "format": "all",
+            "ignore_no_formats_error": True,
         })
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -172,7 +174,7 @@ def download_media(
             }]
         elif format_id.startswith("video_"):
             height = format_id.split("_")[1]
-            ydl_opts["format"] = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
+            ydl_opts["format"] = f"bestvideo[height<={height}]+bestaudio/bestvideo[height<={height}]/best[height<={height}]/best"
             ydl_opts["merge_output_format"] = "mp4"
         else:
             ydl_opts["format"] = "bestvideo+bestaudio/best"
