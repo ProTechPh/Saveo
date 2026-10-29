@@ -1,5 +1,6 @@
 import os
 import shutil
+import subprocess
 import tempfile
 import urllib.parse
 from typing import Optional
@@ -7,6 +8,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import yt_dlp
+import yt_dlp.version
 
 app = FastAPI(title="Saveo API", version="1.0.0")
 
@@ -55,6 +57,17 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/api/version")
+def version_info():
+    try:
+        node_v = subprocess.check_output(["node", "-v"], stderr=subprocess.STDOUT).decode().strip()
+    except Exception as e:
+        node_v = str(e)
+    return {
+        "yt_dlp_version": yt_dlp.version.__version__,
+        "node_version": node_v,
+    }
 
 def sanitize_filename(name: str) -> str:
     invalid = '<>:"/\\|?*'
@@ -149,7 +162,7 @@ def download_media(
         })
 
         if format_id == "bestaudio":
-            ydl_opts["format"] = "bestaudio/best"
+            ydl_opts["format"] = "ba/b"
             ydl_opts["postprocessors"] = [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
@@ -157,10 +170,10 @@ def download_media(
             }]
         elif format_id.startswith("video_"):
             height = format_id.split("_")[1]
-            ydl_opts["format"] = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
+            ydl_opts["format"] = f"bv*[height<={height}]+ba/b[height<={height}]/b"
             ydl_opts["merge_output_format"] = "mp4"
         else:
-            ydl_opts["format"] = "bestvideo+bestaudio/best"
+            ydl_opts["format"] = "bv*+ba/b"
             ydl_opts["merge_output_format"] = "mp4"
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
