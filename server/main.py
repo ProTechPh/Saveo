@@ -39,6 +39,8 @@ def get_base_ydl_opts():
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
+        "js_runtimes": ["node"],
+        "remote_components": ["ejs:github"],
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
@@ -68,6 +70,22 @@ def version_info():
         "yt_dlp_version": yt_dlp.version.__version__,
         "node_version": node_v,
     }
+
+@app.get("/api/debug_raw")
+def debug_raw(url: str = Query(...)):
+    opts = get_base_ydl_opts()
+    opts.update({
+        "skip_download": True,
+        "extract_flat": False,
+        "format": "all",
+        "ignore_no_formats_error": True,
+    })
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        return {
+            "all_format_ids": [f.get("format_id") for f in info.get("formats", [])],
+            "all_exts": list(set(f.get("ext") for f in info.get("formats", []))),
+        }
 
 def sanitize_filename(name: str) -> str:
     invalid = '<>:"/\\|?*'
