@@ -38,11 +38,6 @@ def get_base_ydl_opts():
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["web", "android", "mweb"]
-            }
-        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
@@ -75,6 +70,8 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
         ydl_opts.update({
             "skip_download": True,
             "extract_flat": False,
+            "format": "all",
+            "ignore_no_formats_error": True,
         })
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -89,24 +86,26 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
             extractor = info.get("extractor_key") or "Media"
 
             raw_formats = info.get("formats", [])
-            max_height = info.get("height") or 1080
+            heights_found = set()
             for f in raw_formats:
                 h = f.get("height")
-                if h and isinstance(h, (int, float)) and h > max_height:
-                    max_height = int(h)
+                if h and isinstance(h, (int, float)) and h > 0:
+                    heights_found.add(int(h))
+
+            max_h = max(heights_found) if heights_found else (info.get("height") or 1080)
 
             all_resolutions = [
-                (2160, "4K (2160p)"),
-                (1440, "2K (1440p)"),
+                (2160, "4K Ultra HD (2160p)"),
+                (1440, "2K Quad HD (1440p)"),
                 (1080, "1080p Full HD"),
                 (720, "720p HD"),
                 (480, "480p SD"),
-                (360, "360p"),
+                (360, "360p Medium"),
             ]
 
             formats_list = []
             for res_h, res_label in all_resolutions:
-                if max_height >= res_h:
+                if max_h >= res_h:
                     formats_list.append({
                         "id": f"video_{res_h}",
                         "label": res_label,
