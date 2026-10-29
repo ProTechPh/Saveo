@@ -56,6 +56,27 @@ def root():
 def health():
     return {"status": "ok"}
 
+@app.get("/api/debug_list")
+def debug_list(url: str = Query(...)):
+    ydl_opts = get_base_ydl_opts()
+    ydl_opts.update({"skip_download": True, "extract_flat": False, "format": "all", "ignore_no_formats_error": True})
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        return {
+            "title": info.get("title"),
+            "formats": [
+                {
+                    "format_id": f.get("format_id"),
+                    "ext": f.get("ext"),
+                    "height": f.get("height"),
+                    "vcodec": f.get("vcodec"),
+                    "acodec": f.get("acodec"),
+                    "protocol": f.get("protocol"),
+                }
+                for f in info.get("formats", [])
+            ]
+        }
+
 def sanitize_filename(name: str) -> str:
     invalid = '<>:"/\\|?*'
     for c in invalid:
