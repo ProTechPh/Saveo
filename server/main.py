@@ -1,6 +1,6 @@
 import os
+import re
 import shutil
-import subprocess
 import tempfile
 import urllib.parse
 from typing import Optional
@@ -8,7 +8,6 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import yt_dlp
-import yt_dlp.version
 
 app = FastAPI(title="Saveo API", version="1.0.0")
 
@@ -59,43 +58,8 @@ def root():
 def health():
     return {"status": "ok"}
 
-@app.get("/api/version")
-def version_info():
-    try:
-        node_v = subprocess.check_output(["node", "-v"], stderr=subprocess.STDOUT).decode().strip()
-    except Exception as e:
-        node_v = str(e)
-    return {
-        "yt_dlp_version": yt_dlp.version.__version__,
-        "node_version": node_v,
-    }
-
-@app.get("/api/debug_raw")
-def debug_raw(url: str = Query(...)):
-    try:
-        opts = get_base_ydl_opts()
-        opts.update({
-            "skip_download": True,
-            "extract_flat": False,
-            "format": "all",
-            "ignore_no_formats_error": True,
-        })
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            return {
-                "all_format_ids": [f.get("format_id") for f in info.get("formats", [])],
-                "all_exts": list(set(f.get("ext") for f in info.get("formats", []))),
-                "sample_formats": [
-                    {"id": f.get("format_id"), "h": f.get("height"), "vcodec": f.get("vcodec"), "acodec": f.get("acodec")}
-                    for f in info.get("formats", [])[:10]
-                ]
-            }
-    except Exception as e:
-        import traceback
-        return {"error": str(e), "traceback": traceback.format_exc()}
-
 def sanitize_filename(name: str) -> str:
-    invalid = '<>:"/\\|?*'
+    invalid = '<>:"/\\|?*\n\r\t'
     for c in invalid:
         name = name.replace(c, "-")
     return name[:120].strip()
@@ -187,7 +151,7 @@ def download_media(
         })
 
         if format_id == "bestaudio":
-            ydl_opts["format"] = "ba/b"
+            ydl_opts["format"] = "ba/b*"
             ydl_opts["postprocessors"] = [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
@@ -195,10 +159,10 @@ def download_media(
             }]
         elif format_id.startswith("video_"):
             height = format_id.split("_")[1]
-            ydl_opts["format"] = f"bv*[height<={height}]+ba/b[height<={height}]/b"
+            ydl_opts["format"] = f"bv*[height<={height}]+ba/b[height<={height}]/b*"
             ydl_opts["merge_output_format"] = "mp4"
         else:
-            ydl_opts["format"] = "bv*+ba/b"
+            ydl_opts["format"] = "bv*+ba/b*"
             ydl_opts["merge_output_format"] = "mp4"
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -222,9 +186,11 @@ def download_media(
             finally:
                 shutil.rmtree(tmpdir, ignore_errors=True)
 
+        # RFC 6266 Header-safe ASCII filename + RFC 5987 UTF-8 encoded filename
+        safe_ascii_filename = re.sub(r'[^\x20-\x7E]', '_', filename)
         encoded_filename = urllib.parse.quote(filename)
         headers = {
-            "Content-Disposition": f'attachment; filename="{filename}"; filename*=UTF-8\'\'{encoded_filename}',
+            "Content-Disposition": f'attachment; filename="{safe_ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}',
             "Content-Length": str(os.path.getsize(file_path)),
             "Access-Control-Allow-Origin": "*",
         }
