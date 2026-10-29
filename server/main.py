@@ -10,7 +10,6 @@ import yt_dlp
 
 app = FastAPI(title="Saveo API", version="1.0.0")
 
-# Enable CORS for Vercel and all origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -57,6 +56,27 @@ def root():
 def health():
     return {"status": "ok"}
 
+@app.get("/api/debug_formats")
+def debug_formats(url: str = Query(...)):
+    ydl_opts = get_base_ydl_opts()
+    ydl_opts.update({"skip_download": True, "extract_flat": False, "format": "all", "ignore_no_formats_error": True})
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        return {
+            "height": info.get("height"),
+            "formats_count": len(info.get("formats", [])),
+            "formats_sample": [
+                {
+                    "format_id": f.get("format_id"),
+                    "ext": f.get("ext"),
+                    "height": f.get("height"),
+                    "vcodec": f.get("vcodec"),
+                    "format_note": f.get("format_note"),
+                }
+                for f in info.get("formats", [])[:15]
+            ]
+        }
+
 def sanitize_filename(name: str) -> str:
     invalid = '<>:"/\\|?*'
     for c in invalid:
@@ -92,11 +112,13 @@ def extract_media(url: str = Query(..., description="Media URL to analyze")):
                 if h and isinstance(h, (int, float)) and h > 0:
                     heights_found.add(int(h))
 
-            max_h = max(heights_found) if heights_found else (info.get("height") or 1080)
+            # If YouTube video, standard YouTube videos always support 1080p, 720p, 480p, 360p
+            is_youtube = "youtube" in extractor.lower() or "youtu" in url.lower()
+            max_h = max(heights_found) if heights_found else (info.get("height") or (1080 if is_youtube else 720))
 
             all_resolutions = [
-                (2160, "4K Ultra HD (2160p)"),
-                (1440, "2K Quad HD (1440p)"),
+                (2160, "4K (2160p)"),
+                (1440, "2K (1440p)"),
                 (1080, "1080p Full HD"),
                 (720, "720p HD"),
                 (480, "480p SD"),
