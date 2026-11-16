@@ -28,7 +28,7 @@ Give Saveo a public page that online visitors can open in a browser and understa
 
 ## Constraints
 
-- Static files only: HTML + CSS, no JavaScript, no build step, no dependencies.
+- Static files only: HTML + CSS, plus one small progressive-enhancement script (`site/app.js`) that only rewrites download links. No build step, no dependencies. The page must work with JavaScript disabled — every CTA falls back to the releases page.
 - Published from `site/` through GitHub Actions Pages (`https://protechph.github.io/Saveo/`); the same folder also drops into Netlify/Vercel if the owner changes hosts.
 - Palette and fonts lifted from `web/css/style.css`: amber accent `#e5b04a` on `#0c0c0d`, IBM Plex Sans/Mono.
 - Version shown on the page comes from `VERSION` (currently 1.4.4) and a test fails if they diverge.
@@ -47,3 +47,7 @@ Hero with primary download button and one real screenshot → feature cards → 
 ## Left to the builder
 
 Exact spacing, the card iconography (text/emoji vs inline SVG), and the screenshot framing are the builder's call as long as the page reads as the same product as the desktop app.
+
+## Update 2026-11-16 — Windows auto-detect
+
+Requested by the owner: on a Windows visitor, the download buttons must hand over the latest installer (`.exe`) directly instead of the release page. Implemented as one optional script that reads the latest GitHub release and rewrites the links; non-Windows visitors and anyone with JavaScript off keep the release page. The version pill also takes the released tag, so it cannot drift from the shipped build.

@@ -50,3 +50,34 @@ class TestSitePage(unittest.TestCase):
         self.assertIn("max-width: 100%", self.css)
         self.assertIn("@media (max-width: 720px)", self.css)
         self.assertIn(":focus-visible", self.css)
+
+    def test_windows_installer_enhancement(self):
+        # The static href must stay on the release page; app.js only upgrades it.
+        self.assertIn('src="app.js"', self.html)
+        self.assertIn("data-download", self.html)
+        self.assertIn("data-version", self.html)
+        self.assertTrue((SITE / "app.js").exists())
+
+    def test_pick_exe_prefers_installer(self):
+        import os
+        import subprocess
+        script = (
+            "global.window={};"
+            "global.navigator={userAgent:'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'};"
+            "global.document={querySelectorAll:()=>[]};"
+            "global.fetch=()=>Promise.reject(new Error('offline'));"
+            "require('./site/app.js');"
+            "console.log(window.__saveoPickExe({assets:["
+            "{name:'Saveo-Android.apk',browser_download_url:'apk'},"
+            "{name:'Saveo-Windows-x64.zip',browser_download_url:'zip'},"
+            "{name:'Saveo-Setup.exe',browser_download_url:'exe'}]}));"
+        )
+        for exe in ("node", os.environ.get("NODE", "")):
+            try:
+                out = subprocess.run([exe, "-e", script], cwd=ROOT, capture_output=True, text=True, timeout=30)
+            except (FileNotFoundError, PermissionError):
+                continue
+            self.assertEqual(out.stdout.strip(), "exe", out.stderr)
+            return
+        self.skipTest("node is not installed")
+
