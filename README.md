@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.png" width="200" alt="Droply Logo">
+<img src="assets/logo.png" width="200" alt="Saveo Logo">
 
 ## Your media. Your quality. Your library
 
@@ -8,23 +8,23 @@
 
 *Download Videos, Reels, Shorts, playlists, albums, and audio from YouTube, Instagram, TikTok, Facebook, Reddit, X, Bilibili, and 1,000+ supported media sites at full quality — with live progress and speed tracking.*
 
-[![Latest Release](https://img.shields.io/badge/Release-v1.4.4-6366f1.svg?style=flat-square)](https://github.com/Amlan-Sarkar/Droply/releases)
+[![Latest Release](https://img.shields.io/badge/Release-v1.4.4-6366f1.svg?style=flat-square)](https://github.com/ProTechPh/Saveo/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00d2ff.svg?style=flat-square)](LICENSE)
-[![Platform: Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20(Stable)-0078d4.svg?style=flat-square&logo=windows)](https://github.com/Amlan-Sarkar/Droply/releases)
-[![Platform: Android](https://img.shields.io/badge/Android-Experimental-f59e0b.svg?style=flat-square&logo=android)](https://github.com/Amlan-Sarkar/Droply/releases)
-[![Execution: 100% Local](https://img.shields.io/badge/Privacy-100%25%20Local-10b981.svg?style=flat-square)](https://github.com/Amlan-Sarkar/Droply)
+[![Platform: Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20(Stable)-0078d4.svg?style=flat-square&logo=windows)](https://github.com/ProTechPh/Saveo/releases)
+[![Platform: Android](https://img.shields.io/badge/Android-Experimental-f59e0b.svg?style=flat-square&logo=android)](https://github.com/ProTechPh/Saveo/releases)
+[![Execution: 100% Local](https://img.shields.io/badge/Privacy-100%25%20Local-10b981.svg?style=flat-square)](https://github.com/ProTechPh/Saveo)
 
-[**Get Droply**](#get-droply) · [**Explore Features**](#built-for-your-downloads) · [**Supported Sources**](#where-droply-works) · [**How to Use**](#using-droply)
+[**Get Saveo**](#get-saveo) · [**Explore Features**](#built-for-your-downloads) · [**Supported Sources**](#where-saveo-works) · [**How to Use**](#using-saveo)
 
 </div>
 
 ---
 
-## ✧ Why Droply?
+## ✧ Why Saveo?
 
 Media downloads shouldn't require juggling browser tabs, managing scattered files, or guessing how long a download will take.
 
-Droply brings media extraction, quality selection, download management, and file organization into one interface. Paste a supported link, inspect the available media, choose your preferred format, and follow the download from start to finish.
+Saveo brings media extraction, quality selection, download management, and file organization into one interface. Paste a supported link, inspect the available media, choose your preferred format, and follow the download from start to finish.
 
 - **Choose your format:** Select available video resolutions or extract audio in supported formats.
 - **Keep collections organized:** Download playlists and albums into dedicated folders.
@@ -74,7 +74,7 @@ A breathing local services indicator also displays real-time engine connectivity
 
 ### 📥 Batch Queue
 
-Add multiple URLs on separate lines or separated by commas. Droply parses valid links, applies global presets, and displays queue counters with live progress feedback.
+Add multiple URLs on separate lines or separated by commas. Saveo parses valid links, applies global presets, and displays queue counters with live progress feedback.
 
 </td>
 </tr>
@@ -92,7 +92,7 @@ Filename sanitization preserves original media titles while removing reserved fi
 
 ### ⚡ Instant Splash & Fast Boot
 
-Instant ~50ms visual feedback on launch with Droply's glowing droplet emblem splash window, paired with dynamic real-time engine startup progress tracking (*"Starting engine..."*) and background prewarming so you jump straight to the download interface.
+Instant ~50ms visual feedback on launch with Saveo's glowing droplet emblem splash window, paired with dynamic real-time engine startup progress tracking (*"Starting engine..."*) and background prewarming so you jump straight to the download interface.
 
 </td>
 </tr>
@@ -115,12 +115,12 @@ Smart error detection identifies country-level ISP blocks and geo-restrictions, 
 </table>
 
 <div align="center">
-  <img src="assets/splash.png" width="520" alt="Droply Native Splash Screen" style="border-radius: 14px; box-shadow: 0 12px 35px rgba(0,0,0,0.6); margin: 18px 0;">
+  <img src="assets/splash.png" width="520" alt="Saveo Native Splash Screen" style="border-radius: 14px; box-shadow: 0 12px 35px rgba(0,0,0,0.6); margin: 18px 0;">
 </div>
 
 ### More built in
 
-- **In-app updates:** Check for new Droply releases and view release notes directly inside the application.
+- **In-app updates:** Check for new Saveo releases and view release notes directly inside the application.
 - **Engine maintenance:** Update the embedded yt-dlp core engine from within the application with a single click.
 - **Dynamic version synchronization:** Keeps the displayed application version synchronized with release tags.
 - **Flexible download settings:** Customize default download directory, quality presets, and concurrent-connection preferences.
@@ -128,31 +128,31 @@ Smart error detection identifies country-level ISP blocks and geo-restrictions, 
 
 ---
 
-<a id="get-droply"></a>
+<a id="get-saveo"></a>
 
-## ⬇️ Get Droply
+## ⬇️ Get Saveo
 
-Droply provides pre-compiled packages for Windows and Android. Development tools and a separate Python installation are not required for the packaged releases.
+Saveo provides pre-compiled packages for Windows and Android. Development tools and a separate Python installation are not required for the packaged releases.
 
 ### 🪟 Windows — Stable
 
-*The primary Droply experience, powered by the full Windows download engine.*
+*The primary Saveo experience, powered by the full Windows download engine.*
 
 | Package | Format | Download (v1.4.4) | Latest Mirror |
 | :--- | :--- | :--- | :--- |
-| **Droply Setup** *(Recommended)* | `.exe` Modern Installer | [**Download v1.4.4**](https://github.com/Amlan-Sarkar/Droply/releases/download/v1.4.4/Droply-Setup.exe) | [Latest Installer Mirror](https://github.com/Amlan-Sarkar/Droply/releases/latest/download/Droply-Setup.exe) |
-| **Droply Portable** | Standalone `.zip` | [**Download v1.4.4**](https://github.com/Amlan-Sarkar/Droply/releases/download/v1.4.4/Droply-Windows-x64.zip) | [Latest ZIP Mirror](https://github.com/Amlan-Sarkar/Droply/releases/latest/download/Droply-Windows-x64.zip) |
+| **Saveo Setup** *(Recommended)* | `.exe` Modern Installer | [**Download v1.4.4**](https://github.com/ProTechPh/Saveo/releases/download/v1.4.4/Saveo-Setup.exe) | [Latest Installer Mirror](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Setup.exe) |
+| **Saveo Portable** | Standalone `.zip` | [**Download v1.4.4**](https://github.com/ProTechPh/Saveo/releases/download/v1.4.4/Saveo-Windows-x64.zip) | [Latest ZIP Mirror](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Windows-x64.zip) |
 
 #### Install or launch
 
 - **A. Setup Installer:**
-  1. Download **`Droply-Setup.exe`**.
-  2. Run the installer and follow the prompts. Droply installs into your user profile without requiring administrator prompts.
+  1. Download **`Saveo-Setup.exe`**.
+  2. Run the installer and follow the prompts. Saveo installs into your user profile without requiring administrator prompts.
   3. Launch from the Start Menu, Windows Search, or desktop shortcut. Supports clean, seamless updates.
 - **B. Portable Archive:**
-  1. Download **`Droply-Windows-x64.zip`**.
+  1. Download **`Saveo-Windows-x64.zip`**.
   2. Extract the archive to your preferred folder.
-  3. Run **`Droply.exe`**. No installation required—runs from any folder or USB drive.
+  3. Run **`Saveo.exe`**. No installation required—runs from any folder or USB drive.
 
 #### Windows compatibility
 
@@ -167,7 +167,7 @@ Droply provides pre-compiled packages for Windows and Android. Development tools
 | **Desktop integration** | Native taskbar integration & badges |
 | **Testing note** | Tested on Windows 11 |
 
-[Browse all Windows releases →](https://github.com/Amlan-Sarkar/Droply/releases)
+[Browse all Windows releases →](https://github.com/ProTechPh/Saveo/releases)
 
 ---
 
@@ -177,14 +177,14 @@ Droply provides pre-compiled packages for Windows and Android. Development tools
 
 | Package | Supported Architectures | Direct Package | Releases |
 | :--- | :--- | :--- | :--- |
-| **Droply for Android** | `arm64-v8a`, `armeabi-v7a`, `x86_64` | [**Download APK (v1.4.4)**](https://github.com/Amlan-Sarkar/Droply/releases/download/v1.4.4/Droply-Android.apk) | [All Releases](https://github.com/Amlan-Sarkar/Droply/releases) |
+| **Saveo for Android** | `arm64-v8a`, `armeabi-v7a`, `x86_64` | [**Download APK (v1.4.4)**](https://github.com/ProTechPh/Saveo/releases/download/v1.4.4/Saveo-Android.apk) | [All Releases](https://github.com/ProTechPh/Saveo/releases) |
 
 #### Installation
 
-1. Download **`Droply-Android.apk`** to your device.
+1. Download **`Saveo-Android.apk`** to your device.
 2. Open the APK file. If prompted, allow installation using Android's *"Install unknown apps"* permission.
-3. Launch Droply from your app drawer.
-4. To send a media link to Droply, use the Android **Share** menu from a supported browser or social media app.
+3. Launch Saveo from your app drawer.
+4. To send a media link to Saveo, use the Android **Share** menu from a supported browser or social media app.
 
 #### Android compatibility
 
@@ -195,21 +195,21 @@ Droply provides pre-compiled packages for Windows and Android. Development tools
 | **Interface dependency** | Android System WebView with native modern navigation |
 | **Media engine** | Embedded Python 3.11 with yt-dlp core |
 | **Current capabilities** | Adaptive resolutions (up to 4K / 1440p / 1080p where available) and standalone audio extraction |
-| **Storage location** | Public `Download/Droply` directory (accessible to Gallery and all media players) |
+| **Storage location** | Public `Download/Saveo` directory (accessible to Gallery and all media players) |
 | **Preferences storage** | Persistent native Android `SharedPreferences` |
 | **Status** | Active development; fully functional local downloads |
 
 > [!NOTE]
 > **Android Storage & Playback:**
-> Downloads are saved directly into your device's public `Download/Droply` folder. Tapping **Play / Open File** directly invokes your installed video or audio players (such as VLC, MX Player, or Google Photos), while **Open Containing Folder** navigates directly to your Droply download directory.
+> Downloads are saved directly into your device's public `Download/Saveo` folder. Tapping **Play / Open File** directly invokes your installed video or audio players (such as VLC, MX Player, or Google Photos), while **Open Containing Folder** navigates directly to your Saveo download directory.
 
 ---
 
-<a id="where-droply-works"></a>
+<a id="where-saveo-works"></a>
 
-## 🌐 Where Droply works
+## 🌐 Where Saveo works
 
-Droply uses yt-dlp to extract supported media across 1,000+ sites. Actual compatibility, available streams, and maximum quality depend on the source website and individual media link.
+Saveo uses yt-dlp to extract supported media across 1,000+ sites. Actual compatibility, available streams, and maximum quality depend on the source website and individual media link.
 
 | Source | Supported media | Quality and behavior |
 | :--- | :--- | :--- |
@@ -226,9 +226,9 @@ Droply uses yt-dlp to extract supported media across 1,000+ sites. Actual compat
 
 ---
 
-<a id="using-droply"></a>
+<a id="using-saveo"></a>
 
-## 🎯 Using Droply
+## 🎯 Using Saveo
 
 ### 🪟 Windows Desktop Guide
 
@@ -244,9 +244,9 @@ Droply uses yt-dlp to extract supported media across 1,000+ sites. Actual compat
 
 #### 2. Playlists, Albums & Series
 
-1. Paste a playlist or series link. Droply parses all tracks and displays total duration and item count.
+1. Paste a playlist or series link. Saveo parses all tracks and displays total duration and item count.
 2. Choose your quality preset (4K, 2K, 1080p, 720p, 480p, Best Auto, or Audio). Estimated sizes accurately reflect combined stream bitrates.
-3. Droply automatically creates a dedicated subfolder named after the playlist in your download directory.
+3. Saveo automatically creates a dedicated subfolder named after the playlist in your download directory.
 
 #### 3. Batch Downloads & Queue Management
 
@@ -259,8 +259,8 @@ Droply uses yt-dlp to extract supported media across 1,000+ sites. Actual compat
 
 #### 1. Quick Download & System Share Menu
 
-- **Option A (In-App):** Open Droply on Android, paste any link, and tap **Analyze**. Choose your quality tier and tap **Download**.
-- **Option B (System Share):** In YouTube, Instagram, Twitter/X, or TikTok, tap **Share** and select **Droply**. Droply opens, auto-analyzes the media, and lets you download with a single tap.
+- **Option A (In-App):** Open Saveo on Android, paste any link, and tap **Analyze**. Choose your quality tier and tap **Download**.
+- **Option B (System Share):** In YouTube, Instagram, Twitter/X, or TikTok, tap **Share** and select **Saveo**. Saveo opens, auto-analyzes the media, and lets you download with a single tap.
 
 #### 2. Dedicated Mobile Navigation
 
@@ -269,7 +269,7 @@ Droply uses yt-dlp to extract supported media across 1,000+ sites. Actual compat
 #### 3. Media Player Launching & File Access
 
 - **Play / Open File:** Exclusively queries installed media players (VLC, MX Player, Google Photos, BSPlayer).
-- **Open Containing Folder:** Directly opens `Download/Droply` in your device's file manager.
+- **Open Containing Folder:** Directly opens `Download/Saveo` in your device's file manager.
 
 #### 4. Settings Persistence
 
@@ -277,8 +277,8 @@ Droply uses yt-dlp to extract supported media across 1,000+ sites. Actual compat
 
 #### 5. Bypassing YouTube Bot Verification
 
-- Droply on Android features **zero-configuration cookie auto-detection**.
-- If YouTube challenges requests with *"Sign in to confirm you're not a bot"*, simply place a `cookies.txt` file into your phone's `Download/` or `Download/Droply/` folder. Droply detects and applies it automatically. [See step-by-step instructions below →](#bot-bypass-android)
+- Saveo on Android features **zero-configuration cookie auto-detection**.
+- If YouTube challenges requests with *"Sign in to confirm you're not a bot"*, simply place a `cookies.txt` file into your phone's `Download/` or `Download/Saveo/` folder. Saveo detects and applies it automatically. [See step-by-step instructions below →](#bot-bypass-android)
 
 ---
 
@@ -286,22 +286,22 @@ Droply uses yt-dlp to extract supported media across 1,000+ sites. Actual compat
 
 ## 🍪 Bypassing YouTube "Sign In to Confirm You're Not a Bot"
 
-YouTube occasionally challenges anonymous requests from downloaders with anti-bot verification checks (`Sign in to confirm you're not a bot`). Droply provides built-in solutions for both Windows and Android:
+YouTube occasionally challenges anonymous requests from downloaders with anti-bot verification checks (`Sign in to confirm you're not a bot`). Saveo provides built-in solutions for both Windows and Android:
 
 ### 🪟 Windows Desktop Setup
 
 #### Option 1 (Easiest) — Local Browser Session Extraction
 
-1. Open **Settings** in Droply.
+1. Open **Settings** in Saveo.
 2. Under **Browser Session Extraction**, select **Auto-Probe Installed Browsers** or choose your installed browser (e.g., **Firefox**, **Brave**, **Vivaldi**, **Edge**, or **Chrome**).
-3. Droply will automatically use your existing browser session to authenticate requests.
+3. Saveo will automatically use your existing browser session to authenticate requests.
 
 #### Option 2 (Persistent & Portable) — cookies.txt Import
 
 1. In your browser (Chrome, Edge, or Firefox), install the extension **Get cookies.txt LOCALLY**.
 2. Log into YouTube, click the extension icon, and export your cookies as `cookies.txt`.
-3. In Droply **Settings**, click **Browse...** or **Upload...** under **Persistent cookies.txt File** and select your file.
-4. Your cookies are saved securely on your PC in `~/.droply/cookies.txt` (or `%LOCALAPPDATA%\Droply\cookies.txt`) and never transmitted anywhere else.
+3. In Saveo **Settings**, click **Browse...** or **Upload...** under **Persistent cookies.txt File** and select your file.
+4. Your cookies are saved securely on your PC in `~/.saveo/cookies.txt` (or `%LOCALAPPDATA%\Saveo\cookies.txt`) and never transmitted anywhere else.
 
 ---
 
@@ -309,17 +309,17 @@ YouTube occasionally challenges anonymous requests from downloaders with anti-bo
 
 ### 🤖 Android Setup (Zero-Config cookies.txt Auto-Detection)
 
-On Android, Droply automatically detects and authenticates using standard Netscape `cookies.txt` files placed on your device:
+On Android, Saveo automatically detects and authenticates using standard Netscape `cookies.txt` files placed on your device:
 
 1. **Export cookies:**
    - **From Desktop:** In Chrome, Edge, or Firefox, install the extension **Get cookies.txt LOCALLY**, log into YouTube, and export your cookies as `cookies.txt`.
    - **From Mobile:** Use a mobile browser that supports extensions (such as **Kiwi Browser** or **Firefox for Android**), install **Get cookies.txt LOCALLY**, log into YouTube, and export `cookies.txt`.
 2. **Place in Download Folder:**
    Move or save the exported `cookies.txt` into either of these locations on your device:
-   - `/storage/emulated/0/Download/Droply/cookies.txt` *(Recommended)*
+   - `/storage/emulated/0/Download/Saveo/cookies.txt` *(Recommended)*
    - `/storage/emulated/0/Download/cookies.txt`
 3. **Automatic Detection (Zero Configuration):**
-   Launch Droply. The embedded download engine automatically locates and reads the `cookies.txt` file, seamlessly bypassing bot-verification challenges, age gates, and member-only restrictions without any manual configuration!
+   Launch Saveo. The embedded download engine automatically locates and reads the `cookies.txt` file, seamlessly bypassing bot-verification challenges, age gates, and member-only restrictions without any manual configuration!
 
 ---
 
@@ -334,13 +334,13 @@ On Android, Droply automatically detects and authenticates using standard Netsca
 To download media from banned or region-locked platforms:
 
 - **Turn on a VPN** connected to an unrestricted region (e.g. **Cloudflare WARP**, **ProtonVPN**, or **Windscribe**).
-- Or configure a system HTTP/SOCKS5 proxy before launching Droply. Droply will immediately route traffic through the active connection.
+- Or configure a system HTTP/SOCKS5 proxy before launching Saveo. Saveo will immediately route traffic through the active connection.
 
 ---
 
 ## ⚙️ Under the hood
 
-Droply combines a local interface with its media extraction engine and supporting tools:
+Saveo combines a local interface with its media extraction engine and supporting tools:
 
 | Component | Role |
 | :--- | :--- |
@@ -354,7 +354,7 @@ Droply combines a local interface with its media extraction engine and supportin
 
 ## ⚖️ Privacy & responsible use
 
-Droply is an open-source utility designed for personal archival, educational, and authorized fair-use purposes.
+Saveo is an open-source utility designed for personal archival, educational, and authorized fair-use purposes.
 
 ### 🛡️ Security & Privacy Architecture
 
@@ -368,26 +368,26 @@ Droply is an open-source utility designed for personal archival, educational, an
 
 ### Copyright and platform terms
 
-Users are solely responsible for complying with applicable copyright laws and website Terms of Service. Droply does not bypass DRM (Digital Rights Management), decrypt subscription-protected streams, or circumvent private authentication walls. Only download media you own or are authorized to access and save.
+Users are solely responsible for complying with applicable copyright laws and website Terms of Service. Saveo does not bypass DRM (Digital Rights Management), decrypt subscription-protected streams, or circumvent private authentication walls. Only download media you own or are authorized to access and save.
 
 ---
 
 ## 💬 Feedback & community
 
-- 🐛 **Issues & feature requests:** [Open an issue on GitHub](https://github.com/Amlan-Sarkar/Droply/issues)
-- 🚀 **Releases & updates:** [Browse all Droply releases](https://github.com/Amlan-Sarkar/Droply/releases)
-- 📂 **Source code:** [Explore the Droply repository](https://github.com/Amlan-Sarkar/Droply)
+- 🐛 **Issues & feature requests:** [Open an issue on GitHub](https://github.com/ProTechPh/Saveo/issues)
+- 🚀 **Releases & updates:** [Browse all Saveo releases](https://github.com/ProTechPh/Saveo/releases)
+- 📂 **Source code:** [Explore the Saveo repository](https://github.com/ProTechPh/Saveo)
 
 ---
 
 ## 📄 License
 
-Droply is distributed under the [MIT License](LICENSE).
+Saveo is distributed under the [MIT License](LICENSE).
 
 <div align="center">
 <br>
 
 Made with care, a little curiosity, and a feline friend. 🐈  
-**Yours Truly, Droply**
+**Yours Truly, Saveo**
 
 </div>

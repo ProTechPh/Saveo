@@ -1,12 +1,12 @@
 /**
- * Droply Theme Manager
+ * Saveo Theme Manager
  */
 
 const ThemeManager = {
   currentTheme: 'dark',
 
   init() {
-    const saved = localStorage.getItem('droply_theme') || 'dark';
+    const saved = localStorage.getItem('saveo_theme') || 'dark';
     this.setTheme(saved);
 
     // Bind theme chip clicks
@@ -28,7 +28,7 @@ const ThemeManager = {
     }
     this.currentTheme = themeName;
     document.body.setAttribute('data-theme', themeName);
-    localStorage.setItem('droply_theme', themeName);
+    localStorage.setItem('saveo_theme', themeName);
 
     // Update active chip state
     document.querySelectorAll('.theme-chip').forEach(chip => {

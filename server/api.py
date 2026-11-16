@@ -1,5 +1,5 @@
 """
-Droply - FastAPI Server & Telemetry Bridge
+Saveo - FastAPI Server & Telemetry Bridge
 Provides REST endpoints and real-time SSE event streaming.
 """
 
@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, StreamingResponse
 
 # Priority import path for self-updated yt-dlp core engine
-_engine_updates = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Droply", "engine_updates")
+_engine_updates = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Saveo", "engine_updates")
 if os.path.isdir(_engine_updates) and _engine_updates not in sys.path:
     sys.path.insert(0, _engine_updates)
 
@@ -752,10 +752,10 @@ def is_safe_disk_path(candidate_path: str) -> bool:
         download_dir = os.path.realpath(os.path.abspath(settings_manager.get("download_dir", get_default_download_dir())))
         default_dir = os.path.realpath(os.path.abspath(get_default_download_dir()))
         temp_dir = os.path.realpath(os.path.abspath(tempfile.gettempdir()))
-        dot_droply = os.path.realpath(os.path.abspath(str(Path.home() / ".droply")))
+        dot_saveo = os.path.realpath(os.path.abspath(str(Path.home() / ".saveo")))
         localappdata = os.path.realpath(os.path.abspath(os.environ.get("LOCALAPPDATA", str(Path.home()))))
 
-        allowed_prefixes = [download_dir, default_dir, temp_dir, dot_droply, localappdata]
+        allowed_prefixes = [download_dir, default_dir, temp_dir, dot_saveo, localappdata]
 
         for task in queue_manager.get_all_tasks():
             if task.get("file_path"):
@@ -842,7 +842,7 @@ async def browse_cookie_file():
             root = tk.Tk()
             root.withdraw()
             root.attributes('-topmost', True)
-            initial = str(Path.home() / ".droply")
+            initial = str(Path.home() / ".saveo")
             if not os.path.exists(initial):
                 initial = str(Path.home())
             chosen = filedialog.askopenfilename(
@@ -937,13 +937,13 @@ class CookieUploadRequest(BaseModel):
 @app.post("/api/auth/cookies/upload")
 async def upload_cookie_content(req: CookieUploadRequest):
     """
-    Saves uploaded Netscape cookies.txt directly to ~/.droply/cookies.txt and activates it.
+    Saves uploaded Netscape cookies.txt directly to ~/.saveo/cookies.txt and activates it.
     """
     content = req.content.strip()
     if not content:
         raise HTTPException(status_code=400, detail="Empty cookie content provided.")
 
-    target_dir = Path.home() / ".droply"
+    target_dir = Path.home() / ".saveo"
     target_dir.mkdir(parents=True, exist_ok=True)
     target_file = target_dir / "cookies.txt"
 
@@ -959,7 +959,7 @@ async def upload_cookie_content(req: CookieUploadRequest):
 
 
 def _load_app_version():
-    env_v = os.environ.get("DROPLY_VERSION")
+    env_v = os.environ.get("SAVEO_VERSION")
     if env_v:
         return env_v if env_v.startswith("v") else f"v{env_v}"
 
@@ -1013,7 +1013,7 @@ class InstallerDownloadManager:
             self.speed_bps = 0
             self.percent = 0.0
             self.error_message = ""
-            self.installer_path = os.path.join(tempfile.gettempdir(), "Droply-Setup.exe")
+            self.installer_path = os.path.join(tempfile.gettempdir(), "Saveo-Setup.exe")
 
         threading.Thread(target=self._download_worker, args=(url, gen), daemon=True).start()
 
@@ -1030,7 +1030,7 @@ class InstallerDownloadManager:
         import urllib.request
         resp = None
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Droply-App"})
+            req = urllib.request.Request(url, headers={"User-Agent": "Saveo-App"})
             resp = urllib.request.urlopen(req, timeout=30)
             total_len = resp.headers.get("Content-Length")
             if total_len:
@@ -1127,8 +1127,8 @@ async def system_status():
     custom_c = settings_manager.get("cookie_file")
     if custom_c and os.path.exists(custom_c) and os.path.getsize(custom_c) > 0:
         cookie_path = custom_c
-    elif (Path.home() / ".droply" / "cookies.txt").exists() and (Path.home() / ".droply" / "cookies.txt").stat().st_size > 0:
-        cookie_path = str(Path.home() / ".droply" / "cookies.txt")
+    elif (Path.home() / ".saveo" / "cookies.txt").exists() and (Path.home() / ".saveo" / "cookies.txt").stat().st_size > 0:
+        cookie_path = str(Path.home() / ".saveo" / "cookies.txt")
     elif (Path.cwd() / "cookies.txt").exists() and (Path.cwd() / "cookies.txt").stat().st_size > 0:
         cookie_path = str(Path.cwd() / "cookies.txt")
 
@@ -1205,7 +1205,7 @@ async def get_system_clipboard():
 async def check_updates_endpoint():
     import json
     current_ytdlp_version = _get_ytdlp_version()
-    release_url = "https://github.com/Amlan-Sarkar/Droply/releases"
+    release_url = "https://github.com/ProTechPh/Saveo/releases"
 
     loop = asyncio.get_event_loop()
 
@@ -1213,8 +1213,8 @@ async def check_updates_endpoint():
         try:
             import urllib.request
             req = urllib.request.Request(
-                "https://api.github.com/repos/Amlan-Sarkar/Droply/releases/latest",
-                headers={"User-Agent": "Droply-App"}
+                "https://api.github.com/repos/ProTechPh/Saveo/releases/latest",
+                headers={"User-Agent": "Saveo-App"}
             )
             with urllib.request.urlopen(req, timeout=8) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
@@ -1265,7 +1265,7 @@ async def check_updates_endpoint():
             import urllib.request
             req = urllib.request.Request(
                 "https://pypi.org/pypi/yt-dlp/json",
-                headers={"User-Agent": "Droply-App"}
+                headers={"User-Agent": "Saveo-App"}
             )
             with urllib.request.urlopen(req, timeout=5) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
@@ -1341,7 +1341,7 @@ async def install_and_restart_endpoint():
 
     try:
         # Launch the Inno Setup installer silently or normally
-        # Using subprocess.Popen allows installer to run independently while Droply exits
+        # Using subprocess.Popen allows installer to run independently while Saveo exits
         subprocess.Popen([path], shell=False)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to launch installer: {e}")
@@ -1371,7 +1371,7 @@ async def update_ytdlp_endpoint():
             # 1. Query latest version info from PyPI
             req = urllib.request.Request(
                 "https://pypi.org/pypi/yt-dlp/json",
-                headers={"User-Agent": "Droply-Updater"}
+                headers={"User-Agent": "Saveo-Updater"}
             )
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -1409,7 +1409,7 @@ async def update_ytdlp_endpoint():
                 return {"status": "error", "message": f"No wheel package found for yt-dlp {latest_ver}."}
 
             # 3. Download wheel and extract yt_dlp directly into local engine_updates directory
-            updates_base = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Droply", "engine_updates")
+            updates_base = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Saveo", "engine_updates")
             os.makedirs(updates_base, exist_ok=True)
 
             with tempfile.TemporaryDirectory() as tmp_dir:
@@ -1493,7 +1493,7 @@ if web_dir and web_dir.exists():
     async def index_page():
         html_file = web_dir / "index.html"
         html = html_file.read_text(encoding="utf-8")
-        injected = f'<meta name="droply-auth" content="{AUTH_TOKEN}">\n  <script>window.__DROPLY_AUTH_TOKEN__="{AUTH_TOKEN}";</script>\n</head>'
+        injected = f'<meta name="saveo-auth" content="{AUTH_TOKEN}">\n  <script>window.__SAVEO_AUTH_TOKEN__="{AUTH_TOKEN}";</script>\n</head>'
         html = html.replace('</head>', injected, 1)
         return HTMLResponse(content=html, media_type="text/html")
 

@@ -1,5 +1,5 @@
 """
-Droply - Queue & Download Manager
+Saveo - Queue & Download Manager
 Coordinates concurrent download jobs, batch queues, status tracking,
 cancellation, retries, and real-time event broadcasts.
 """
@@ -127,7 +127,7 @@ class QueueManager:
         self.tasks: Dict[str, DownloadTask] = {}
         self.task_order: List[str] = []
         self._lock = threading.Lock()
-        self._executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="droply_worker")
+        self._executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="saveo_worker")
         self._listeners: List[Callable[[Dict[str, Any]], None]] = []
         self._running = True
 

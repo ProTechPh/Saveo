@@ -1,10 +1,11 @@
 """
-Droply - Settings Manager
+Saveo - Settings Manager
 Persists and manages user configurations in local config storage.
 """
 
 import json
 import os
+import shutil
 from pathlib import Path
 from typing import Dict, Any
 from .file_manager import get_default_download_dir
@@ -13,11 +14,14 @@ from .file_manager import get_default_download_dir
 class SettingsManager:
     def __init__(self, config_dir: Path = None):
         if config_dir is None:
-            self.config_dir = Path.home() / ".droply"
+            self.config_dir = Path.home() / ".saveo"
         else:
             self.config_dir = config_dir
 
-        self.config_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.config_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
         self.config_file = self.config_dir / "settings.json"
         self._settings = self._load()
 

@@ -1,5 +1,5 @@
 """
-Droply - API Integration Tests
+Saveo - API Integration Tests
 Tests all FastAPI REST endpoints.
 """
 

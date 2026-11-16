@@ -43,26 +43,26 @@ jobs:
       - name: Configure Version Metadata
         shell: pwsh
         run: |
-          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag_name }}" } else { "${{ github.ref_name }}" }
-          if (-not $tag -or $tag -eq "") { $tag = "v1.4.3" }
-          $tagClean = $tag.TrimStart('v')
-          Write-Host "Configuring Droply version: $tag (Clean: $tagClean)"
-          Set-Content -Path VERSION -Value $tagClean
-          "DROPLY_VERSION=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "RELEASE_VERSION_CLEAN=$tagClean" | Out-File -FilePath $env:GITHUB_ENV -Append
+            $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag_name }}" } else { "${{ github.ref_name }}" }
+            if (-not $tag -or $tag -eq "") { $tag = "v1.4.3" }
+            $tagClean = $tag.TrimStart('v')
+            Write-Host "Configuring Saveo version: $tag (Clean: $tagClean)"
+            Set-Content -Path VERSION -Value $tagClean
+            "SAVEO_VERSION=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "RELEASE_VERSION_CLEAN=$tagClean" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build Standalone (Windows)
         run: |
-          pyinstaller --noconfirm --name Droply --onedir --windowed --noconsole --icon Droply.ico --splash "assets/splash.png" --add-data "web;web" --add-data "assets;assets" --add-data "Droply.ico;." --add-data "VERSION;." --collect-all imageio_ffmpeg --collect-all pywebview --collect-all pythonnet --hidden-import tkinter --hidden-import tkinter.filedialog --hidden-import uvicorn.logging --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on app.py
-          New-Item -ItemType Directory -Force -Path dist/Droply/bin
+          pyinstaller --noconfirm --name Saveo --onedir --windowed --noconsole --icon Saveo.ico --splash "assets/splash.png" --add-data "web;web" --add-data "assets;assets" --add-data "Saveo.ico;." --add-data "VERSION;." --collect-all imageio_ffmpeg --collect-all pywebview --collect-all pythonnet --hidden-import tkinter --hidden-import tkinter.filedialog --hidden-import uvicorn.logging --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on app.py
+          New-Item -ItemType Directory -Force -Path dist/Saveo/bin
           if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
-            Copy-Item (Get-Command ffmpeg).Source -Destination dist/Droply/bin/ffmpeg.exe
+            Copy-Item (Get-Command ffmpeg).Source -Destination dist/Saveo/bin/ffmpeg.exe
           } else {
-            python -c "import shutil, imageio_ffmpeg; shutil.copy(imageio_ffmpeg.get_ffmpeg_exe(), 'dist/Droply/bin/ffmpeg.exe')"
+            python -c "import shutil, imageio_ffmpeg; shutil.copy(imageio_ffmpeg.get_ffmpeg_exe(), 'dist/Saveo/bin/ffmpeg.exe')"
           }
-          Copy-Item Droply.ico -Destination dist/Droply/Droply.ico -Force
-          Copy-Item VERSION -Destination dist/Droply/VERSION -Force
-          Compress-Archive -Path dist/Droply -DestinationPath Droply-Windows-x64.zip -Force
+          Copy-Item Saveo.ico -Destination dist/Saveo/Saveo.ico -Force
+          Copy-Item VERSION -Destination dist/Saveo/VERSION -Force
+          Compress-Archive -Path dist/Saveo -DestinationPath Saveo-Windows-x64.zip -Force
 
       - name: Build Inno Setup Windows Installer
         shell: pwsh
@@ -73,19 +73,19 @@ jobs:
           }
           Write-Host "Compiling Inno Setup using: $iscc with version: $env:RELEASE_VERSION_CLEAN"
           & $iscc "/DMyAppVersion=$env:RELEASE_VERSION_CLEAN" installer.iss
-          if (-not (Test-Path "dist/Droply-Setup.exe")) {
-            Write-Error "dist/Droply-Setup.exe was not created!"
+          if (-not (Test-Path "dist/Saveo-Setup.exe")) {
+            Write-Error "Installer executable was not created in dist!"
             exit 1
           }
-          Move-Item dist/Droply-Setup.exe Droply-Setup.exe -Force
+          Move-Item dist/Saveo-Setup.exe Saveo-Setup.exe -Force
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Droply-Windows-Packages
+          name: Saveo-Windows-Packages
           path: |
-            Droply-Setup.exe
-            Droply-Windows-x64.zip
+            Saveo-Setup.exe
+            Saveo-Windows-x64.zip
 
   # ---------------- 2. ANDROID STANDALONE APK BUILD (EXPERIMENTAL) ----------------
   build-android:
@@ -131,14 +131,14 @@ jobs:
             echo "Error: No APK found after build!"
             exit 1
           fi
-          cp "$APK_FILE" Droply-Android.apk
-          ls -lh Droply-Android.apk
+          cp "$APK_FILE" Saveo-Android.apk
+          ls -lh Saveo-Android.apk
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Droply-Android.apk
-          path: Droply-Android.apk
+          name: Saveo-Android.apk
+          path: Saveo-Android.apk
 
   # ---------------- 3. PUBLISH TO GITHUB RELEASE ----------------
   publish-release:
@@ -179,7 +179,7 @@ jobs:
         with:
           tag_name: ${{ steps.release_tag.outputs.tag }}
           files: release-assets/*
-          name: Droply ${{ steps.release_tag.outputs.tag }} - Windows & Android Release
+          name: Saveo ${{ steps.release_tag.outputs.tag }} - Windows & Android Release
           body_path: release_body.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

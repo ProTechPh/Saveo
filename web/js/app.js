@@ -1,9 +1,9 @@
 /**
- * Droply Main Application Controller
+ * Saveo Main Application Controller
  * Unified Downloader, Library & History, Settings, and Update System
  */
 
-class DroplyApp {
+class SaveoApp {
   constructor() {
     this.currentTab = 'single';
     this.currentMedia = null;
@@ -187,7 +187,7 @@ class DroplyApp {
 
     // Batch Drawer Toggle button
     const btnBatchToggle = document.getElementById('btn-batch-toggle');
-    const batchDrawer = document.getElementById('droply-batch-drawer');
+    const batchDrawer = document.getElementById('saveo-batch-drawer');
     const batchTextarea = document.getElementById('batch-urls-input');
     const btnClearBatch = document.getElementById('btn-clear-batch');
 
@@ -231,9 +231,9 @@ class DroplyApp {
       } catch (e) {}
 
       // 2. Android native interface
-      if (!text && window.DroplyAndroid && window.DroplyAndroid.getClipboardText) {
+      if (!text && window.SaveoAndroid && window.SaveoAndroid.getClipboardText) {
         try {
-          text = window.DroplyAndroid.getClipboardText();
+          text = window.SaveoAndroid.getClipboardText();
         } catch (e) {}
       }
 
@@ -298,7 +298,7 @@ class DroplyApp {
       document.getElementById('video-formats-section').style.display = 'block';
       document.getElementById('audio-formats-section').style.display = 'none';
       const btnText = document.getElementById('btn-start-download-text');
-      if (btnText && (!window.DroplyAndroid || !window.DroplyAndroid.getClipboardText)) {
+      if (btnText && (!window.SaveoAndroid || !window.SaveoAndroid.getClipboardText)) {
         btnText.textContent = 'Download';
       }
       if (this.currentMedia && this.currentMedia.formats && this.currentMedia.formats.length > 0) {
@@ -306,11 +306,11 @@ class DroplyApp {
         this.selectedFormat = preferred;
         const grid = document.getElementById('video-formats-grid');
         if (grid && preferred) {
-          grid.querySelectorAll('.droply-quality-chip').forEach(c => {
+          grid.querySelectorAll('.saveo-quality-chip').forEach(c => {
             c.classList.toggle('selected', c.getAttribute('data-fid') === preferred.format_id);
           });
         }
-        const sizeEl = document.getElementById('droply-estimated-size');
+        const sizeEl = document.getElementById('saveo-estimated-size');
         if (sizeEl) sizeEl.textContent = (preferred && preferred.filesize_str) ? preferred.filesize_str : 'Standard';
       }
     });
@@ -322,7 +322,7 @@ class DroplyApp {
       document.getElementById('video-formats-section').style.display = 'none';
       document.getElementById('audio-formats-section').style.display = 'block';
       const btnText = document.getElementById('btn-start-download-text');
-      if (btnText && (!window.DroplyAndroid || !window.DroplyAndroid.getClipboardText)) {
+      if (btnText && (!window.SaveoAndroid || !window.SaveoAndroid.getClipboardText)) {
         btnText.textContent = 'Download';
       }
       if (this.currentMedia && this.currentMedia.audio_formats && this.currentMedia.audio_formats.length > 0) {
@@ -330,11 +330,11 @@ class DroplyApp {
         this.selectedFormat = preferred;
         const grid = document.getElementById('audio-formats-grid');
         if (grid && preferred) {
-          grid.querySelectorAll('.droply-quality-chip').forEach(c => {
+          grid.querySelectorAll('.saveo-quality-chip').forEach(c => {
             c.classList.toggle('selected', c.getAttribute('data-fid') === preferred.format_id);
           });
         }
-        const sizeEl = document.getElementById('droply-estimated-size');
+        const sizeEl = document.getElementById('saveo-estimated-size');
         if (sizeEl) sizeEl.textContent = (preferred && preferred.filesize_str) ? preferred.filesize_str : '~3.5 MB';
       }
     });
@@ -905,20 +905,7 @@ class DroplyApp {
       this.updateRecentDownloadsHeader();
       container.innerHTML = `
         <div class="downloader-cat-idle">
-          <svg class="cat-idle-svg" viewBox="0 0 120 70" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M 28 50 C 28 36, 46 26, 66 26 C 86 26, 98 36, 98 50 C 98 58, 84 62, 62 62 C 38 62, 28 58, 28 50 Z" />
-            <path d="M 24 43 C 18 39, 14 33, 17 27 C 19 24, 23 26, 26 28 C 30 25, 35 24, 38 27 C 42 32, 39 39, 34 44" />
-            <path d="M 18 27 L 16 16 L 24 24" />
-            <path d="M 32 24 L 40 16 L 38 27" />
-            <path d="M 20 33 Q 23 36 26 33" />
-            <path d="M 29 33 Q 32 36 35 33" />
-            <path d="M 98 48 C 106 43, 112 47, 110 53 C 108 59, 101 60, 93 60" />
-            <path d="M 15 37 L 6 37" />
-            <path d="M 15 40 L 7 42" />
-            <path d="M 37 37 L 46 37" />
-            <path d="M 36 40 L 45 42" />
-          </svg>
-          <div class="cat-idle-text">Ready for media. Paste a link above to begin downloading.</div>
+          <div class="cat-idle-text">Nothing in the queue. Paste a link above to start a download.</div>
         </div>
       `;
       return;
@@ -1369,18 +1356,18 @@ class DroplyApp {
       if (mediaAuthBadge) {
         if (status.cookies_ready) {
           if (status.cookies_path) {
-            mediaAuthBadge.textContent = '🍪 cookies.txt Active';
+            mediaAuthBadge.textContent = 'cookies.txt active';
           } else if (status.cookie_browser && status.cookie_browser !== 'none') {
-            mediaAuthBadge.textContent = `🍪 ${status.cookie_browser.toUpperCase()} Active`;
+            mediaAuthBadge.textContent = `${status.cookie_browser} active`;
           } else {
-            mediaAuthBadge.textContent = '🍪 Cookies Active';
+            mediaAuthBadge.textContent = 'Cookies active';
           }
-          mediaAuthBadge.style.background = 'rgba(0, 229, 163, 0.15)';
-          mediaAuthBadge.style.color = '#00e5a3';
+          mediaAuthBadge.style.background = 'rgba(79, 169, 111, 0.14)';
+          mediaAuthBadge.style.color = 'var(--good, #4fa96f)';
         } else {
-          mediaAuthBadge.textContent = 'None (Public)';
-          mediaAuthBadge.style.background = 'rgba(255, 255, 255, 0.06)';
-          mediaAuthBadge.style.color = 'var(--text-muted, #94a3b8)';
+          mediaAuthBadge.textContent = 'None (public)';
+          mediaAuthBadge.style.background = '';
+          mediaAuthBadge.style.color = '';
         }
       }
 
@@ -1454,7 +1441,7 @@ class DroplyApp {
         if (!line) continue;
         // Skip release download table, dividers, and installation instructions
         if (line.startsWith('|') || line.startsWith('---') || line.startsWith('===') || line === '--') continue;
-        if (line.toLowerCase().includes('tested on windows') || line.toLowerCase().includes('download droply')) continue;
+        if (line.toLowerCase().includes('tested on windows') || line.toLowerCase().includes('download saveo') || line.toLowerCase().includes('download saveo')) continue;
         if (line.toLowerCase().includes('###') || line.toLowerCase().includes('platform |')) continue;
         
         if (/^[-*+]\s+/.test(line)) {
@@ -1576,7 +1563,7 @@ class DroplyApp {
     if (btnPrimary) {
       btnPrimary.addEventListener('click', async () => {
       if (downloadState === 'can-download') {
-        const url = currentUpdateInfo?.installer_url || `https://github.com/Amlan-Sarkar/Droply/releases/download/${currentUpdateInfo?.app_latest || 'v1.3.7'}/Droply-Setup.exe`;
+        const url = currentUpdateInfo?.installer_url || `https://github.com/ProTechPh/Saveo/releases/download/${currentUpdateInfo?.app_latest || 'v1.3.7'}/Saveo-Setup.exe`;
         const size = currentUpdateInfo?.installer_size || 0;
 
         downloadState = 'downloading';
@@ -2000,5 +1987,6 @@ class DroplyApp {
 
 // Instantiate on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-  window.droplyApp = new DroplyApp();
+  window.saveoApp = new SaveoApp();
+  window.saveoApp = window.saveoApp;
 });

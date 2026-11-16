@@ -1,7 +1,7 @@
-# Droply Android Proguard Rules
+# Saveo Android Proguard Rules
 # Add project specific ProGuard rules here.
 
--keep class com.droply.app.** { *; }
--keepclassmembers class com.droply.app.** { *; }
+-keep class com.saveo.app.** { *; }
+-keepclassmembers class com.saveo.app.** { *; }
 -keepattributes *Annotation*
 -keepattributes JavascriptInterface

@@ -1,5 +1,5 @@
 """
-Droply - Base Provider Definition
+Saveo - Base Provider Definition
 Defines the standard provider abstraction for media extraction and downloads.
 """
 
@@ -58,7 +58,7 @@ class ProviderCapabilities:
 
 class BaseProvider(ABC):
     """
-    Abstract base class for all Droply media providers.
+    Abstract base class for all Saveo media providers.
     """
 
     @abstractmethod

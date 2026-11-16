@@ -1,5 +1,5 @@
 """
-Droply Server Package
+Saveo Server Package
 """
 from .api import app
 

@@ -1,5 +1,5 @@
 """
-Droply - Embedded Android yt-dlp Engine
+Saveo - Embedded Android yt-dlp Engine
 Executes media extraction, formatting, and downloads locally inside Android.
 """
 
@@ -51,10 +51,10 @@ def get_ffmpeg_path() -> Optional[str]:
 
     # Check common Android and system locations
     candidates = [
-        "/data/data/com.droply.app/files/ffmpeg",
-        "/data/data/com.droply.app/lib/libffmpeg.so",
-        "/data/user/0/com.droply.app/files/ffmpeg",
-        "/data/user/0/com.droply.app/lib/libffmpeg.so",
+        "/data/data/com.saveo.app/files/ffmpeg",
+        "/data/data/com.saveo.app/lib/libffmpeg.so",
+        "/data/user/0/com.saveo.app/files/ffmpeg",
+        "/data/user/0/com.saveo.app/lib/libffmpeg.so",
         shutil.which('ffmpeg'),
         shutil.which('ffmpeg.exe'),
     ]
@@ -77,12 +77,12 @@ def has_ffmpeg() -> bool:
 def locate_cookie_file() -> Optional[str]:
     """Finds cookies.txt on Android in public Download folder or app storage."""
     candidates = [
-        "/storage/emulated/0/Download/Droply/cookies.txt",
+        "/storage/emulated/0/Download/Saveo/cookies.txt",
         "/storage/emulated/0/Download/cookies.txt",
-        os.path.expanduser("~/Download/Droply/cookies.txt"),
+        os.path.expanduser("~/Download/Saveo/cookies.txt"),
         os.path.expanduser("~/Download/cookies.txt"),
-        "/data/data/com.droply.app/files/cookies.txt",
-        "/data/user/0/com.droply.app/files/cookies.txt"
+        "/data/data/com.saveo.app/files/cookies.txt",
+        "/data/user/0/com.saveo.app/files/cookies.txt"
     ]
     for c in candidates:
         if c and os.path.isfile(c) and os.path.getsize(c) > 0:
@@ -137,7 +137,7 @@ def extract_twitter_syndication(url: str) -> Optional[Dict[str, Any]]:
 
     api_url = f"https://api.vxtwitter.com/i/status/{tweet_id}"
     req = urllib.request.Request(api_url, headers={
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) DroplyMediaEngine'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) SaveoMediaEngine'
     })
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -384,7 +384,7 @@ def analyze_url(url: str) -> str:
                 }
                 return json.dumps(result)
 
-            # Single Video Extraction (Droply-style Resolution Tiers)
+            # Single Video Extraction (Saveo-style Resolution Tiers)
             raw_formats = info.get("formats", [])
             duration = info.get("duration") or 0
 
@@ -791,7 +791,7 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
 
 def check_updates(installed_app_version: str = "v1.4.4") -> str:
     """
-    Checks for updates for Droply and yt-dlp core.
+    Checks for updates for Saveo and yt-dlp core.
     """
     current_app_version = installed_app_version or "v1.4.4"
     if not current_app_version.startswith("v"):
@@ -805,13 +805,13 @@ def check_updates(installed_app_version: str = "v1.4.4") -> str:
 
     latest_app_version = current_app_version
     app_up_to_date = True
-    release_url = "https://github.com/Amlon-Sarkar/Droply/releases"
+    release_url = "https://github.com/ProTechPh/Saveo/releases"
 
     try:
         import urllib.request
         req = urllib.request.Request(
-            "https://api.github.com/repos/Amlon-Sarkar/Droply/releases/latest",
-            headers={"User-Agent": "Droply-App"}
+            "https://api.github.com/repos/ProTechPh/Saveo/releases/latest",
+            headers={"User-Agent": "Saveo-App"}
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode('utf-8'))
@@ -829,7 +829,7 @@ def check_updates(installed_app_version: str = "v1.4.4") -> str:
         import urllib.request
         req = urllib.request.Request(
             "https://pypi.org/pypi/yt-dlp/json",
-            headers={"User-Agent": "Droply-App"}
+            headers={"User-Agent": "Saveo-App"}
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode('utf-8'))
@@ -864,7 +864,7 @@ def update_ytdlp_core() -> str:
 
         req = urllib.request.Request(
             "https://pypi.org/pypi/yt-dlp/json",
-            headers={"User-Agent": "Droply-Updater"}
+            headers={"User-Agent": "Saveo-Updater"}
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode('utf-8'))
@@ -897,7 +897,7 @@ def update_ytdlp_core() -> str:
                 break
 
         if not target_dir:
-            base_dir = os.environ.get("HOME") or "/data/data/com.droply.app/files"
+            base_dir = os.environ.get("HOME") or "/data/data/com.saveo.app/files"
             target_dir = os.path.join(base_dir, "site-packages")
             os.makedirs(target_dir, exist_ok=True)
             if target_dir not in sys.path:

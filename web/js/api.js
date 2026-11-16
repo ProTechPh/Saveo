@@ -1,16 +1,16 @@
 /**
- * Droply Client API & Event Stream Manager
+ * Saveo Client API & Event Stream Manager
  * Full desktop server bridge + native mobile persistent client engine
  */
 
-class DroplyAPI {
+class SaveoAPI {
   constructor() {
     let origin = window.location.origin;
     if (!origin || origin === 'null' || origin.startsWith('file:') || origin === 'undefined') {
       origin = 'http://127.0.0.1:8765';
     }
     this.baseUrl = origin;
-    this.authToken = window.__DROPLY_AUTH_TOKEN__ || (document.querySelector('meta[name="droply-auth"]')?.content) || '';
+    this.authToken = window.__SAVEO_AUTH_TOKEN__ || window.__SAVEO_AUTH_TOKEN__ || (document.querySelector('meta[name="saveo-auth"]')?.content) || (document.querySelector('meta[name="saveo-auth"]')?.content) || '';
     this.eventSource = null;
     this.listeners = {};
     this.activeMobileTask = null;
@@ -33,13 +33,13 @@ class DroplyAPI {
   }
 
   isNativeMobile() {
-    return typeof window.DroplyAndroid !== 'undefined';
+    return typeof window.SaveoAndroid !== 'undefined';
   }
 
   // ---------------- MOBILE LOCAL STORAGE HELPERS ----------------
   getMobileHistory() {
     try {
-      return JSON.parse(localStorage.getItem('droply_mobile_history') || '[]');
+      return JSON.parse(localStorage.getItem('saveo_mobile_history') || '[]');
     } catch (e) {
       return [];
     }
@@ -47,7 +47,7 @@ class DroplyAPI {
 
   saveMobileHistory(history) {
     try {
-      localStorage.setItem('droply_mobile_history', JSON.stringify(history.slice(0, 100)));
+      localStorage.setItem('saveo_mobile_history', JSON.stringify(history.slice(0, 100)));
     } catch (e) {}
   }
 
@@ -69,7 +69,7 @@ class DroplyAPI {
 
   getMobileQueue() {
     try {
-      return JSON.parse(localStorage.getItem('droply_mobile_queue') || '[]');
+      return JSON.parse(localStorage.getItem('saveo_mobile_queue') || '[]');
     } catch (e) {
       return [];
     }
@@ -77,7 +77,7 @@ class DroplyAPI {
 
   saveMobileQueue(queue) {
     try {
-      localStorage.setItem('droply_mobile_queue', JSON.stringify(queue));
+      localStorage.setItem('saveo_mobile_queue', JSON.stringify(queue));
     } catch (e) {}
   }
 
@@ -93,9 +93,9 @@ class DroplyAPI {
 
   getMobileSettingsSync() {
     try {
-      let saved = JSON.parse(localStorage.getItem('droply_mobile_settings') || '{}');
-      if (typeof window.DroplyAndroid !== 'undefined' && window.DroplyAndroid.getSetting) {
-        const raw = window.DroplyAndroid.getSetting("droply_settings_json", "");
+      let saved = JSON.parse(localStorage.getItem('saveo_mobile_settings') || '{}');
+      if (typeof window.SaveoAndroid !== 'undefined' && window.SaveoAndroid.getSetting) {
+        const raw = window.SaveoAndroid.getSetting("saveo_settings_json", "");
         if (raw) saved = { ...saved, ...JSON.parse(raw) };
       }
       return saved;
@@ -129,9 +129,9 @@ class DroplyAPI {
       this.activeMobileTask = nextTask;
       this.updateMobileQueueTask(nextTask.id, { status: 'downloading', percent: 0 });
 
-      if (typeof window.DroplyAndroid !== 'undefined') {
-        if (typeof window.DroplyAndroid.startDownloadWithFolder === 'function') {
-          window.DroplyAndroid.startDownloadWithFolder(
+      if (typeof window.SaveoAndroid !== 'undefined') {
+        if (typeof window.SaveoAndroid.startDownloadWithFolder === 'function') {
+          window.SaveoAndroid.startDownloadWithFolder(
             nextTask.url,
             nextTask.format_id || 'best',
             Boolean(nextTask.is_audio),
@@ -140,7 +140,7 @@ class DroplyAPI {
             nextTask.playlist_folder || ''
           );
         } else {
-          window.DroplyAndroid.startDownload(
+          window.SaveoAndroid.startDownload(
             nextTask.url,
             nextTask.format_id || 'best',
             Boolean(nextTask.is_audio),
@@ -155,7 +155,7 @@ class DroplyAPI {
   // ---------------- EVENT STREAM (SSE) & NATIVE MOBILE BRIDGE ----------------
   async ensureAuthToken() {
     if (!this.authToken) {
-      this.authToken = window.__DROPLY_AUTH_TOKEN__ || (document.querySelector('meta[name="droply-auth"]')?.content) || '';
+      this.authToken = window.__SAVEO_AUTH_TOKEN__ || (document.querySelector('meta[name="saveo-auth"]')?.content) || '';
       if (!this.authToken) {
         try {
           const resp = await fetch(`${this.baseUrl}/api/auth/token`);
@@ -163,7 +163,7 @@ class DroplyAPI {
             const data = await resp.json();
             if (data && data.token) {
               this.authToken = data.token;
-              window.__DROPLY_AUTH_TOKEN__ = this.authToken;
+              window.__SAVEO_AUTH_TOKEN__ = this.authToken;
             }
           }
         } catch (e) {}
@@ -173,7 +173,7 @@ class DroplyAPI {
   }
 
   setupMobileNativeListeners() {
-    window.addEventListener('droply_progress', (e) => {
+    window.addEventListener('saveo_progress', (e) => {
       const d = e.detail || {};
       const pct = typeof d.percent !== 'undefined' ? d.percent : (d.progress_percent || 0);
       const taskPayload = {
@@ -197,7 +197,7 @@ class DroplyAPI {
       this.emit("task_progress", { task: taskPayload });
     });
 
-    window.addEventListener('droply_completed', (e) => {
+    window.addEventListener('saveo_completed', (e) => {
       const d = e.detail || {};
       const taskId = d.id || (this.activeMobileTask ? this.activeMobileTask.id : 'native_' + Date.now());
       const title = d.title || (this.activeMobileTask ? this.activeMobileTask.title : 'Downloaded Media');
@@ -230,7 +230,7 @@ class DroplyAPI {
       this.processNextMobileQueueItem();
     });
 
-    window.addEventListener('droply_cancelled', () => {
+    window.addEventListener('saveo_cancelled', () => {
       if (this.activeMobileTask) {
         this.updateMobileQueueTask(this.activeMobileTask.id, { status: 'cancelled' });
         this.activeMobileTask = null;
@@ -238,14 +238,14 @@ class DroplyAPI {
       this.emit('task_cancelled', {});
     });
 
-    window.addEventListener('droply_paused', () => {
+    window.addEventListener('saveo_paused', () => {
       if (this.activeMobileTask) {
         this.updateMobileQueueTask(this.activeMobileTask.id, { status: 'paused' });
       }
       this.emit('task_updated', { task: { status: 'paused' } });
     });
 
-    window.addEventListener('droply_error', (e) => {
+    window.addEventListener('saveo_error', (e) => {
       const d = e.detail || {};
       const taskId = d.id || (this.activeMobileTask ? this.activeMobileTask.id : 'native_active');
       const errTask = {
@@ -323,7 +323,7 @@ class DroplyAPI {
   // ---------------- REST & NATIVE APIS ----------------
   async request(endpoint, options = {}, retries = 1) {
     if (!this.authToken) {
-      this.authToken = window.__DROPLY_AUTH_TOKEN__ || (document.querySelector('meta[name="droply-auth"]')?.content) || '';
+      this.authToken = window.__SAVEO_AUTH_TOKEN__ || (document.querySelector('meta[name="saveo-auth"]')?.content) || '';
       if (!this.authToken && !endpoint.includes('/api/auth/token')) {
         try {
           const tResp = await fetch(`${this.baseUrl}/api/auth/token`);
@@ -331,7 +331,7 @@ class DroplyAPI {
             const tData = await tResp.json();
             if (tData.token) {
               this.authToken = tData.token;
-              window.__DROPLY_AUTH_TOKEN__ = this.authToken;
+              window.__SAVEO_AUTH_TOKEN__ = this.authToken;
             }
           }
         } catch (e) {}
@@ -366,7 +366,7 @@ class DroplyAPI {
           const tData = await tResp.json();
           if (tData.token) {
             this.authToken = tData.token;
-            window.__DROPLY_AUTH_TOKEN__ = this.authToken;
+            window.__SAVEO_AUTH_TOKEN__ = this.authToken;
             return this.request(endpoint, options, retries - 1);
           }
         }
@@ -409,34 +409,34 @@ class DroplyAPI {
 
   async analyzeUrl(url) {
     // Native Android Engine
-    if (typeof window.DroplyAndroid !== 'undefined') {
+    if (typeof window.SaveoAndroid !== 'undefined') {
       return new Promise((resolve, reject) => {
         const handler = (e) => {
-          window.removeEventListener('droply_analyzed', handler);
+          window.removeEventListener('saveo_analyzed', handler);
           if (e.detail && e.detail.error) {
             reject(new Error(e.detail.error));
           } else {
             resolve(e.detail);
           }
         };
-        window.addEventListener('droply_analyzed', handler);
-        window.DroplyAndroid.analyzeUrl(url);
+        window.addEventListener('saveo_analyzed', handler);
+        window.SaveoAndroid.analyzeUrl(url);
       });
     }
 
     // Native iOS Engine
-    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.DroplyIOS) {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.SaveoIOS) {
       return new Promise((resolve, reject) => {
         const handler = (e) => {
-          window.removeEventListener('droply_analyzed', handler);
+          window.removeEventListener('saveo_analyzed', handler);
           if (e.detail && e.detail.error) {
             reject(new Error(e.detail.error));
           } else {
             resolve(e.detail);
           }
         };
-        window.addEventListener('droply_analyzed', handler);
-        window.webkit.messageHandlers.DroplyIOS.postMessage({ action: 'analyze', url });
+        window.addEventListener('saveo_analyzed', handler);
+        window.webkit.messageHandlers.SaveoIOS.postMessage({ action: 'analyze', url });
       });
     }
 
@@ -448,7 +448,7 @@ class DroplyAPI {
 
   async startDownload(payload) {
     // Native Android Engine
-    if (typeof window.DroplyAndroid !== 'undefined') {
+    if (typeof window.SaveoAndroid !== 'undefined') {
       const taskId = 'native_active';
       this.activeMobileTask = {
         id: taskId,
@@ -461,7 +461,7 @@ class DroplyAPI {
         audio_format: payload.audio_format || 'mp3'
       };
 
-      window.DroplyAndroid.startDownload(
+      window.SaveoAndroid.startDownload(
         payload.url,
         payload.format_id || 'best',
         Boolean(payload.is_audio),
@@ -472,7 +472,7 @@ class DroplyAPI {
     }
 
     // Native iOS Engine
-    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.DroplyIOS) {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.SaveoIOS) {
       const taskId = 'native_active';
       this.activeMobileTask = {
         id: taskId,
@@ -485,7 +485,7 @@ class DroplyAPI {
         audio_format: payload.audio_format || 'mp3'
       };
 
-      window.webkit.messageHandlers.DroplyIOS.postMessage({
+      window.webkit.messageHandlers.SaveoIOS.postMessage({
         action: 'download',
         url: payload.url,
         format_id: payload.format_id || 'best',
@@ -575,8 +575,8 @@ class DroplyAPI {
 
   async cancelTask(taskId) {
     if (this.isNativeMobile()) {
-      if (typeof window.DroplyAndroid !== 'undefined' && window.DroplyAndroid.cancelDownload) {
-        window.DroplyAndroid.cancelDownload();
+      if (typeof window.SaveoAndroid !== 'undefined' && window.SaveoAndroid.cancelDownload) {
+        window.SaveoAndroid.cancelDownload();
       }
       this.updateMobileQueueTask(taskId, { status: 'cancelled' });
       if (this.activeMobileTask && this.activeMobileTask.id === taskId) {
@@ -589,8 +589,8 @@ class DroplyAPI {
 
   async pauseTask(taskId) {
     if (this.isNativeMobile()) {
-      if (typeof window.DroplyAndroid !== 'undefined' && window.DroplyAndroid.pauseDownload) {
-        window.DroplyAndroid.pauseDownload();
+      if (typeof window.SaveoAndroid !== 'undefined' && window.SaveoAndroid.pauseDownload) {
+        window.SaveoAndroid.pauseDownload();
       }
       this.updateMobileQueueTask(taskId, { status: 'paused' });
       this.emit('task_updated', { task: { id: taskId, status: 'paused' } });
@@ -608,9 +608,9 @@ class DroplyAPI {
         this.activeMobileTask = task;
         this.updateMobileQueueTask(taskId, { status: 'downloading' });
         this.emit('task_updated', { task: { id: taskId, status: 'downloading' } });
-        if (typeof window.DroplyAndroid !== 'undefined') {
-          if (typeof window.DroplyAndroid.resumeDownload === 'function') {
-            window.DroplyAndroid.resumeDownload(
+        if (typeof window.SaveoAndroid !== 'undefined') {
+          if (typeof window.SaveoAndroid.resumeDownload === 'function') {
+            window.SaveoAndroid.resumeDownload(
               task.url,
               task.format_id || 'best',
               Boolean(task.is_audio),
@@ -618,8 +618,8 @@ class DroplyAPI {
               task.title || '',
               task.playlist_folder || ''
             );
-          } else if (typeof window.DroplyAndroid.startDownloadWithFolder === 'function') {
-            window.DroplyAndroid.startDownloadWithFolder(
+          } else if (typeof window.SaveoAndroid.startDownloadWithFolder === 'function') {
+            window.SaveoAndroid.startDownloadWithFolder(
               task.url,
               task.format_id || 'best',
               Boolean(task.is_audio),
@@ -628,7 +628,7 @@ class DroplyAPI {
               task.playlist_folder || ''
             );
           } else {
-            window.DroplyAndroid.startDownload(
+            window.SaveoAndroid.startDownload(
               task.url,
               task.format_id || 'best',
               Boolean(task.is_audio),
@@ -693,7 +693,7 @@ class DroplyAPI {
 
   async clearHistory() {
     if (this.isNativeMobile()) {
-      localStorage.removeItem('droply_mobile_history');
+      localStorage.removeItem('saveo_mobile_history');
       return { success: true };
     }
     return this.request('/api/history/clear', { method: 'POST' });
@@ -702,10 +702,10 @@ class DroplyAPI {
   async getSettings() {
     if (this.isNativeMobile()) {
       try {
-        let saved = JSON.parse(localStorage.getItem('droply_mobile_settings') || '{}');
-        if (typeof window.DroplyAndroid !== 'undefined' && window.DroplyAndroid.getSetting) {
+        let saved = JSON.parse(localStorage.getItem('saveo_mobile_settings') || '{}');
+        if (typeof window.SaveoAndroid !== 'undefined' && window.SaveoAndroid.getSetting) {
           try {
-            const raw = window.DroplyAndroid.getSetting("droply_settings_json", "");
+            const raw = window.SaveoAndroid.getSetting("saveo_settings_json", "");
             if (raw) {
               const nativeSaved = JSON.parse(raw);
               saved = { ...saved, ...nativeSaved };
@@ -713,21 +713,21 @@ class DroplyAPI {
           } catch (e) {}
         }
         return {
-          download_dir: saved.download_dir || 'Downloads/Droply',
+          download_dir: saved.download_dir || 'Downloads/Saveo',
           default_video_quality: saved.default_video_quality || 'best',
           default_audio_format: saved.default_audio_format || 'mp3',
           max_concurrent_downloads: saved.max_concurrent_downloads ? parseInt(saved.max_concurrent_downloads, 10) : 3,
-          theme: saved.theme || localStorage.getItem('droply_theme') || 'dark',
+          theme: saved.theme || localStorage.getItem('saveo_theme') || 'dark',
           notifications: saved.notifications !== false,
           ...saved
         };
       } catch (e) {
         return {
-          download_dir: 'Downloads/Droply',
+          download_dir: 'Downloads/Saveo',
           default_video_quality: 'best',
           default_audio_format: 'mp3',
           max_concurrent_downloads: 3,
-          theme: localStorage.getItem('droply_theme') || 'dark',
+          theme: localStorage.getItem('saveo_theme') || 'dark',
           notifications: true
         };
       }
@@ -739,13 +739,13 @@ class DroplyAPI {
     if (this.isNativeMobile()) {
       const current = await this.getSettings();
       const merged = { ...current, ...settings };
-      localStorage.setItem('droply_mobile_settings', JSON.stringify(merged));
+      localStorage.setItem('saveo_mobile_settings', JSON.stringify(merged));
       if (merged.theme) {
-        localStorage.setItem('droply_theme', merged.theme);
+        localStorage.setItem('saveo_theme', merged.theme);
       }
-      if (typeof window.DroplyAndroid !== 'undefined' && window.DroplyAndroid.saveSetting) {
+      if (typeof window.SaveoAndroid !== 'undefined' && window.SaveoAndroid.saveSetting) {
         try {
-          window.DroplyAndroid.saveSetting("droply_settings_json", JSON.stringify(merged));
+          window.SaveoAndroid.saveSetting("saveo_settings_json", JSON.stringify(merged));
         } catch (e) {}
       }
       return merged;
@@ -758,10 +758,10 @@ class DroplyAPI {
 
   async browseFolder() {
     if (this.isNativeMobile()) {
-      if (typeof window.DroplyAndroid !== 'undefined') {
-        window.DroplyAndroid.openDownloadFolder();
+      if (typeof window.SaveoAndroid !== 'undefined') {
+        window.SaveoAndroid.openDownloadFolder();
       }
-      return { folder: 'Downloads/Droply', updated: true };
+      return { folder: 'Downloads/Saveo', updated: true };
     }
     return this.request('/api/browse-folder', { method: 'POST' });
   }
@@ -792,10 +792,10 @@ class DroplyAPI {
 
   async openFolder(path = null) {
     if (this.isNativeMobile()) {
-      if (typeof window.DroplyAndroid !== 'undefined') {
-        window.DroplyAndroid.openDownloadFolder();
+      if (typeof window.SaveoAndroid !== 'undefined') {
+        window.SaveoAndroid.openDownloadFolder();
       }
-      return { success: true, path: 'Downloads/Droply' };
+      return { success: true, path: 'Downloads/Saveo' };
     }
     return this.request('/api/open-folder', {
       method: 'POST',
@@ -805,8 +805,8 @@ class DroplyAPI {
 
   async revealFile(filePath, taskId = null) {
     if (this.isNativeMobile()) {
-      if (typeof window.DroplyAndroid !== 'undefined') {
-        window.DroplyAndroid.openDownloadFolder();
+      if (typeof window.SaveoAndroid !== 'undefined') {
+        window.SaveoAndroid.openDownloadFolder();
       }
       return { success: true };
     }
@@ -818,11 +818,11 @@ class DroplyAPI {
 
   async openFile(filePath, taskId = null) {
     if (this.isNativeMobile()) {
-      if (typeof window.DroplyAndroid !== 'undefined') {
-        if (typeof window.DroplyAndroid.openFile === 'function') {
-          window.DroplyAndroid.openFile(filePath || '');
+      if (typeof window.SaveoAndroid !== 'undefined') {
+        if (typeof window.SaveoAndroid.openFile === 'function') {
+          window.SaveoAndroid.openFile(filePath || '');
         } else {
-          window.DroplyAndroid.openDownloadFolder();
+          window.SaveoAndroid.openDownloadFolder();
         }
         return { success: true };
       }
@@ -836,9 +836,9 @@ class DroplyAPI {
 
   async getClipboard() {
     if (this.isNativeMobile()) {
-      if (typeof window.DroplyAndroid !== 'undefined' && typeof window.DroplyAndroid.getClipboardText === 'function') {
+      if (typeof window.SaveoAndroid !== 'undefined' && typeof window.SaveoAndroid.getClipboardText === 'function') {
         try {
-          const t = window.DroplyAndroid.getClipboardText();
+          const t = window.SaveoAndroid.getClipboardText();
           return { text: t || '' };
         } catch (e) {
           return { text: '' };
@@ -851,16 +851,16 @@ class DroplyAPI {
 
   async checkUpdates() {
     if (this.isNativeMobile()) {
-      if (typeof window.DroplyAndroid !== 'undefined' && typeof window.DroplyAndroid.checkUpdates === 'function') {
+      if (typeof window.SaveoAndroid !== 'undefined' && typeof window.SaveoAndroid.checkUpdates === 'function') {
         return new Promise((resolve) => {
           const handler = (e) => {
-            window.removeEventListener('droply_update_checked', handler);
+            window.removeEventListener('saveo_update_checked', handler);
             resolve(e.detail || { app_installed: 'v1.4.4', app_latest: 'v1.4.4', app_up_to_date: true });
           };
-          window.addEventListener('droply_update_checked', handler);
-          window.DroplyAndroid.checkUpdates();
+          window.addEventListener('saveo_update_checked', handler);
+          window.SaveoAndroid.checkUpdates();
           setTimeout(() => {
-            window.removeEventListener('droply_update_checked', handler);
+            window.removeEventListener('saveo_update_checked', handler);
             resolve({ app_installed: 'v1.4.4', app_latest: 'v1.4.4', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true });
           }, 6000);
         });
@@ -872,16 +872,16 @@ class DroplyAPI {
 
   async updateYtdlpCore() {
     if (this.isNativeMobile()) {
-      if (typeof window.DroplyAndroid !== 'undefined' && typeof window.DroplyAndroid.updateYtdlpCore === 'function') {
+      if (typeof window.SaveoAndroid !== 'undefined' && typeof window.SaveoAndroid.updateYtdlpCore === 'function') {
         return new Promise((resolve) => {
           const handler = (e) => {
-            window.removeEventListener('droply_ytdlp_updated', handler);
+            window.removeEventListener('saveo_ytdlp_updated', handler);
             resolve(e.detail || { status: 'success', message: 'Core updated' });
           };
-          window.addEventListener('droply_ytdlp_updated', handler);
-          window.DroplyAndroid.updateYtdlpCore();
+          window.addEventListener('saveo_ytdlp_updated', handler);
+          window.SaveoAndroid.updateYtdlpCore();
           setTimeout(() => {
-            window.removeEventListener('droply_ytdlp_updated', handler);
+            window.removeEventListener('saveo_ytdlp_updated', handler);
             resolve({ status: 'success', message: 'yt-dlp core verified up to date.' });
           }, 8000);
         });
@@ -897,7 +897,7 @@ class DroplyAPI {
         ffmpeg_ready: true,
         ffmpeg_path: 'Native Mobile Engine',
         ytdlp_version: 'Embedded Mobile yt-dlp',
-        default_dir: 'Downloads/Droply',
+        default_dir: 'Downloads/Saveo',
         python_version: '3.11'
       };
     }
@@ -928,4 +928,6 @@ class DroplyAPI {
   }
 }
 
-const api = new DroplyAPI();
+const api = new SaveoAPI();
+window.saveoAPI = api;
+window.SaveoAPI = SaveoAPI;

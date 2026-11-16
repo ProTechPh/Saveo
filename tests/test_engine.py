@@ -1,5 +1,5 @@
 """
-Droply - Automated Comprehensive Engine & API Test Suite
+Saveo - Automated Comprehensive Engine & API Test Suite
 Validates core providers, platform detection, file manager, queue, settings, history, and REST API.
 """
 
@@ -22,7 +22,7 @@ from engine.history_manager import HistoryManager
 from engine.queue_manager import QueueManager, DownloadTask
 
 
-class TestDroplyCore(unittest.TestCase):
+class TestSaveoCore(unittest.TestCase):
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
@@ -68,7 +68,7 @@ class TestDroplyCore(unittest.TestCase):
         self.assertTrue(len(clean) > 0)
 
         # Empty fallback
-        self.assertEqual(sanitize_filename(""), "droply_media")
+        self.assertEqual(sanitize_filename(""), "saveo_media")
 
     def test_duplicate_filename_collision(self):
         """Test collision resolution: Video.mp4 -> Video (1).mp4 -> Video (2).mp4."""

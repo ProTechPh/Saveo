@@ -1,4 +1,4 @@
-package com.droply.app;
+package com.saveo.app;
 
 import android.Manifest;
 import android.app.DownloadManager;
@@ -82,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
             public void onProgress(String progressJson) {
                 mainHandler.post(() -> {
                     if (webView != null) {
-                        String js = "window.dispatchEvent(new CustomEvent('droply_progress', { detail: " + progressJson + " }));";
+                        String js = "window.dispatchEvent(new CustomEvent('saveo_progress', { detail: " + progressJson + " }));";
                         webView.evaluateJavascript(js, null);
                     }
                 });
@@ -92,7 +92,7 @@ public class MainActivity extends AppCompatActivity {
             public void onComplete(String completeJson) {
                 mainHandler.post(() -> {
                     if (webView != null) {
-                        String js = "window.dispatchEvent(new CustomEvent('droply_completed', { detail: " + completeJson + " }));";
+                        String js = "window.dispatchEvent(new CustomEvent('saveo_completed', { detail: " + completeJson + " }));";
                         webView.evaluateJavascript(js, null);
                         Toast.makeText(MainActivity.this, "Download completed!", Toast.LENGTH_SHORT).show();
                     }
@@ -103,7 +103,7 @@ public class MainActivity extends AppCompatActivity {
             public void onError(String errorJson) {
                 mainHandler.post(() -> {
                     if (webView != null) {
-                        String js = "window.dispatchEvent(new CustomEvent('droply_error', { detail: " + errorJson + " }));";
+                        String js = "window.dispatchEvent(new CustomEvent('saveo_error', { detail: " + errorJson + " }));";
                         webView.evaluateJavascript(js, null);
                     }
                 });
@@ -113,7 +113,7 @@ public class MainActivity extends AppCompatActivity {
             public void onPaused() {
                 mainHandler.post(() -> {
                     if (webView != null) {
-                        String js = "window.dispatchEvent(new CustomEvent('droply_paused', { detail: {} }));";
+                        String js = "window.dispatchEvent(new CustomEvent('saveo_paused', { detail: {} }));";
                         webView.evaluateJavascript(js, null);
                     }
                 });
@@ -123,7 +123,7 @@ public class MainActivity extends AppCompatActivity {
             public void onCancelled() {
                 mainHandler.post(() -> {
                     if (webView != null) {
-                        String js = "window.dispatchEvent(new CustomEvent('droply_cancelled', { detail: {} }));";
+                        String js = "window.dispatchEvent(new CustomEvent('saveo_cancelled', { detail: {} }));";
                         webView.evaluateJavascript(js, null);
                     }
                 });
@@ -172,8 +172,8 @@ public class MainActivity extends AppCompatActivity {
                 // 3. Check system and app candidate paths
                 if (ffmpegPath == null) {
                     String[] candidates = {
-                            "/data/data/com.droply.app/lib/libffmpeg.so",
-                            "/data/user/0/com.droply.app/lib/libffmpeg.so",
+                            "/data/data/com.saveo.app/lib/libffmpeg.so",
+                            "/data/user/0/com.saveo.app/lib/libffmpeg.so",
                             "/system/bin/ffmpeg"
                     };
                     for (String c : candidates) {
@@ -187,7 +187,7 @@ public class MainActivity extends AppCompatActivity {
                 }
 
                 if (ffmpegPath != null && Python.isStarted()) {
-                    PyObject pyEngine = Python.getInstance().getModule("droply_engine");
+                    PyObject pyEngine = Python.getInstance().getModule("saveo_engine");
                     if (pyEngine != null) {
                         pyEngine.callAttr("set_ffmpeg_path", ffmpegPath);
                     }
@@ -230,8 +230,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
         // Add native Saveo Android bridge to JavaScript
-        DroplyNativeBridge bridge = new DroplyNativeBridge();
-        webView.addJavascriptInterface(bridge, "DroplyAndroid");
+        SaveoNativeBridge bridge = new SaveoNativeBridge();
         webView.addJavascriptInterface(bridge, "SaveoAndroid");
 
         final WebViewAssetLoader assetLoader = new WebViewAssetLoader.Builder()
@@ -264,7 +263,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Load local Droply web app via secure asset loader
+        // Load local Saveo web app via secure asset loader
         webView.loadUrl("https://appassets.androidplatform.net/assets/web/index.html");
     }
 
@@ -306,9 +305,9 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * Native JavaScript Bridge exposed as `window.DroplyAndroid`
+     * Native JavaScript Bridge exposed as `window.SaveoAndroid`
      */
-    public class DroplyNativeBridge {
+    public class SaveoNativeBridge {
 
         @JavascriptInterface
         public boolean isNative() {
@@ -325,18 +324,18 @@ public class MainActivity extends AppCompatActivity {
             executor.execute(() -> {
                 try {
                     Python py = Python.getInstance();
-                    PyObject module = py.getModule("droply_engine");
+                    PyObject module = py.getModule("saveo_engine");
                     PyObject result = module.callAttr("analyze_url", url);
                     String json = result.toString();
 
                     mainHandler.post(() -> {
-                        String js = "window.dispatchEvent(new CustomEvent('droply_analyzed', { detail: " + json + " }));";
+                        String js = "window.dispatchEvent(new CustomEvent('saveo_analyzed', { detail: " + json + " }));";
                         webView.evaluateJavascript(js, null);
                     });
                 } catch (Exception e) {
                     mainHandler.post(() -> {
                         String errJson = "{\"error\": " + JSONObjectQuote(e.getMessage()) + "}";
-                        String js = "window.dispatchEvent(new CustomEvent('droply_analyzed', { detail: " + errJson + " }));";
+                        String js = "window.dispatchEvent(new CustomEvent('saveo_analyzed', { detail: " + errJson + " }));";
                         webView.evaluateJavascript(js, null);
                     });
                 }
@@ -409,14 +408,14 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void saveSetting(String key, String value) {
             try {
-                getSharedPreferences("droply_prefs", MODE_PRIVATE).edit().putString(key, value).apply();
+                getSharedPreferences("saveo_prefs", MODE_PRIVATE).edit().putString(key, value).apply();
             } catch (Exception ignored) {}
         }
 
         @JavascriptInterface
         public String getSetting(String key, String defaultValue) {
             try {
-                return getSharedPreferences("droply_prefs", MODE_PRIVATE).getString(key, defaultValue);
+                return getSharedPreferences("saveo_prefs", MODE_PRIVATE).getString(key, defaultValue);
             } catch (Exception e) {
                 return defaultValue;
             }
@@ -440,7 +439,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                     if (file == null || !file.exists() || file.isDirectory()) {
-                        // Find the most recent media file in Droply download folder
+                        // Find the most recent media file in Saveo download folder
                         if (downloadDir.exists()) {
                             File[] candidates = downloadDir.listFiles(f -> f.isFile() && !f.getName().startsWith("."));
                             if (candidates != null && candidates.length > 0) {
@@ -495,17 +494,17 @@ public class MainActivity extends AppCompatActivity {
                     } catch (Exception ignored) {}
 
                     Python py = Python.getInstance();
-                    PyObject module = py.getModule("droply_engine");
+                    PyObject module = py.getModule("saveo_engine");
                     PyObject result = module.callAttr("check_updates", versionName);
                     String json = result.toString();
                     mainHandler.post(() -> {
-                        String js = "window.dispatchEvent(new CustomEvent('droply_update_checked', { detail: " + json + " }));";
+                        String js = "window.dispatchEvent(new CustomEvent('saveo_update_checked', { detail: " + json + " }));";
                         webView.evaluateJavascript(js, null);
                     });
                 } catch (Exception e) {
                     mainHandler.post(() -> {
                         String errJson = "{\"error\": " + JSONObjectQuote(e.getMessage()) + "}";
-                        String js = "window.dispatchEvent(new CustomEvent('droply_update_checked', { detail: " + errJson + " }));";
+                        String js = "window.dispatchEvent(new CustomEvent('saveo_update_checked', { detail: " + errJson + " }));";
                         webView.evaluateJavascript(js, null);
                     });
                 }
@@ -517,17 +516,17 @@ public class MainActivity extends AppCompatActivity {
             executor.execute(() -> {
                 try {
                     Python py = Python.getInstance();
-                    PyObject module = py.getModule("droply_engine");
+                    PyObject module = py.getModule("saveo_engine");
                     PyObject result = module.callAttr("update_ytdlp_core");
                     String json = result.toString();
                     mainHandler.post(() -> {
-                        String js = "window.dispatchEvent(new CustomEvent('droply_ytdlp_updated', { detail: " + json + " }));";
+                        String js = "window.dispatchEvent(new CustomEvent('saveo_ytdlp_updated', { detail: " + json + " }));";
                         webView.evaluateJavascript(js, null);
                     });
                 } catch (Exception e) {
                     mainHandler.post(() -> {
                         String errJson = "{\"error\": " + JSONObjectQuote(e.getMessage()) + "}";
-                        String js = "window.dispatchEvent(new CustomEvent('droply_ytdlp_updated', { detail: " + errJson + " }));";
+                        String js = "window.dispatchEvent(new CustomEvent('saveo_ytdlp_updated', { detail: " + errJson + " }));";
                         webView.evaluateJavascript(js, null);
                     });
                 }
@@ -579,14 +578,14 @@ public class MainActivity extends AppCompatActivity {
     public class EngineCallback {
         public void onProgress(String progressJson) {
             mainHandler.post(() -> {
-                String js = "window.dispatchEvent(new CustomEvent('droply_progress', { detail: " + progressJson + " }));";
+                String js = "window.dispatchEvent(new CustomEvent('saveo_progress', { detail: " + progressJson + " }));";
                 webView.evaluateJavascript(js, null);
             });
         }
 
         public void onComplete(String completeJson) {
             mainHandler.post(() -> {
-                String js = "window.dispatchEvent(new CustomEvent('droply_completed', { detail: " + completeJson + " }));";
+                String js = "window.dispatchEvent(new CustomEvent('saveo_completed', { detail: " + completeJson + " }));";
                 webView.evaluateJavascript(js, null);
                 Toast.makeText(MainActivity.this, "Download completed!", Toast.LENGTH_SHORT).show();
             });
@@ -594,7 +593,7 @@ public class MainActivity extends AppCompatActivity {
 
         public void onError(String errorJson) {
             mainHandler.post(() -> {
-                String js = "window.dispatchEvent(new CustomEvent('droply_error', { detail: " + errorJson + " }));";
+                String js = "window.dispatchEvent(new CustomEvent('saveo_error', { detail: " + errorJson + " }));";
                 webView.evaluateJavascript(js, null);
             });
         }

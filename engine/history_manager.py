@@ -1,10 +1,11 @@
 """
-Droply - History Manager
+Saveo - History Manager
 Maintains records of completed, failed, and past downloads locally.
 """
 
 import json
 import os
+import shutil
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -13,11 +14,14 @@ from typing import List, Dict, Any, Optional
 class HistoryManager:
     def __init__(self, config_dir: Path = None):
         if config_dir is None:
-            self.config_dir = Path.home() / ".droply"
+            self.config_dir = Path.home() / ".saveo"
         else:
             self.config_dir = config_dir
 
-        self.config_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.config_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
         self.history_file = self.config_dir / "history.json"
         self._history: List[Dict[str, Any]] = self._load()
 

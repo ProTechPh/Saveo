@@ -1,5 +1,5 @@
 """
-droply - Real Local Media Download Integration Test
+Saveo - Real Local Media Download Integration Test
 Performs actual download of sample media to ensure stream extraction,
 progress callback, filesystem writing, and completion hooks work 100%.
 """

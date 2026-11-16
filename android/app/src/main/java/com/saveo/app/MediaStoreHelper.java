@@ -1,4 +1,4 @@
-package com.droply.app;
+package com.saveo.app;
 
 import android.content.Context;
 import android.content.Intent;
@@ -16,7 +16,7 @@ import java.io.File;
  */
 public class MediaStoreHelper {
 
-    private static final String TAG = "DroplyMediaStore";
+    private static final String TAG = "SaveoMediaStore";
 
     /**
      * Resolves appropriate MIME type based on file extension and media type.
