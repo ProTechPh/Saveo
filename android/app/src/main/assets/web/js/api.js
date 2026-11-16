@@ -175,6 +175,8 @@ class SaveoAPI {
   setupMobileNativeListeners() {
     window.addEventListener('saveo_progress', (e) => {
       const d = e.detail || {};
+      this._lastProgressAt = Date.now();
+      this._waitingForData = false;
       const pct = typeof d.percent !== 'undefined' ? d.percent : (d.progress_percent || 0);
       const taskPayload = {
         id: d.id || (this.activeMobileTask ? this.activeMobileTask.id : 'native_active'),
@@ -265,6 +267,24 @@ class SaveoAPI {
       this.emit("task_error", { task: errTask });
       this.processNextMobileQueueItem();
     });
+
+    // yt-dlp can go quiet for a few seconds between requests; say so instead of a frozen card
+    if (!this._mobileHeartbeat) {
+      this._mobileHeartbeat = setInterval(() => {
+        const t = this.activeMobileTask;
+        if (!t || t.status !== 'downloading') {
+          this._waitingForData = false;
+          return;
+        }
+        if (Date.now() - (this._lastProgressAt || 0) < 3000) {
+          this._waitingForData = false;
+          return;
+        }
+        if (this._waitingForData) return;
+        this._waitingForData = true;
+        this.emit("task_progress", { task: { ...t, speed_str: 'Waiting for data...' } });
+      }, 1000);
+    }
   }
 
   async initEventStream() {
