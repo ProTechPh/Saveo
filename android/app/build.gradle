@@ -3,6 +3,19 @@ plugins {
     id 'com.chaquo.python'
 }
 
+def appVersionCode = 15
+if (project.hasProperty("versionCode")) {
+    try {
+        appVersionCode = Integer.parseInt(project.property("versionCode").toString().trim())
+    } catch (Exception ignored) {
+    }
+}
+
+def appVersionName = "1.4.4"
+if (project.hasProperty("versionName")) {
+    appVersionName = project.property("versionName").toString().trim()
+}
+
 android {
     namespace 'com.saveo.app'
     compileSdk 34
@@ -11,8 +24,8 @@ android {
         applicationId "com.saveo.app"
         minSdk 24
         targetSdk 34
-        versionCode (project.findProperty("versionCode") ?: "15").toInteger()
-        versionName (project.findProperty("versionName") ?: "1.4.4").toString()
+        versionCode appVersionCode
+        versionName appVersionName
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
