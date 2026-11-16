@@ -1,19 +1,19 @@
-// Progressive enhancement: on Windows, point the download buttons straight at the
-// latest installer so visitors skip the release page. Without this file the page
-// still works — every link falls back to the releases page.
+// Progressive enhancement: rewrite the download buttons to the latest release assets
+// (installer for Windows, APK for Android) so visitors skip the release page. Without
+// this file every link stays on the releases page.
 (() => {
   const RELEASE_PAGE = "https://github.com/ProTechPh/Saveo/releases/latest";
   const API = "https://api.github.com/repos/ProTechPh/Saveo/releases/latest";
 
-  const pickExe = (release) =>
-    (release.assets || []).find((a) => /\.exe$/i.test(a.name))?.browser_download_url || "";
+  const pickAsset = (release, ext) =>
+    (release.assets || []).find((a) => a.name.toLowerCase().endsWith(ext))
+      ?.browser_download_url || "";
 
   // exposed so the page check can prove the selection without network access
-  window.__saveoPickExe = pickExe;
+  window.__saveoPickAsset = pickAsset;
 
-  const isWindows = /Windows/i.test(
-    navigator.userAgentData?.platform || navigator.userAgent || ""
-  );
+  const ua = navigator.userAgentData?.platform || navigator.userAgent || "";
+  const visitor = /Android/i.test(ua) ? "android" : /Windows/i.test(ua) ? "windows" : "";
 
   fetch(API, { headers: { Accept: "application/vnd.github+json" } })
     .then((res) => (res.ok ? res.json() : Promise.reject(new Error(res.status))))
@@ -23,14 +23,20 @@
         if (version) el.textContent = `v${version}`;
       });
 
-      const exe = pickExe(release);
-      if (!isWindows || !exe) return;
       document.querySelectorAll("[data-download]").forEach((link) => {
-        link.href = exe;
-        link.title = `Saveo ${release.tag_name} installer (.exe)`;
-      });
-      document.querySelectorAll("[data-download-label]").forEach((el) => {
-        el.textContent = "Download installer (.exe)";
+        const target = link.dataset.download || visitor;
+        const url = target === "windows" ? pickAsset(release, ".exe")
+          : target === "android" ? pickAsset(release, ".apk")
+          : "";
+        if (!url) return;
+        link.href = url;
+        link.title = `Saveo ${release.tag_name} ${target} download`;
+        const label = link.querySelector("[data-download-label]");
+        if (label && target === visitor && target === "windows") {
+          label.textContent = "Download installer (.exe)";
+        } else if (label && target === visitor && target === "android") {
+          label.textContent = "Download APK";
+        }
       });
     })
     .catch(() => {

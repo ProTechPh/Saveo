@@ -54,11 +54,13 @@ class TestSitePage(unittest.TestCase):
     def test_windows_installer_enhancement(self):
         # The static href must stay on the release page; app.js only upgrades it.
         self.assertIn('src="app.js"', self.html)
-        self.assertIn("data-download", self.html)
+        self.assertIn('data-download="windows"', self.html)
+        self.assertIn('data-download="android"', self.html)
+        self.assertIn("Download for Android", self.html)
         self.assertIn("data-version", self.html)
         self.assertTrue((SITE / "app.js").exists())
 
-    def test_pick_exe_prefers_installer(self):
+    def test_pick_asset_prefers_installer_per_platform(self):
         import os
         import subprocess
         script = (
@@ -67,17 +69,18 @@ class TestSitePage(unittest.TestCase):
             "global.document={querySelectorAll:()=>[]};"
             "global.fetch=()=>Promise.reject(new Error('offline'));"
             "require('./site/app.js');"
-            "console.log(window.__saveoPickExe({assets:["
+            "const rel={assets:["
             "{name:'Saveo-Android.apk',browser_download_url:'apk'},"
             "{name:'Saveo-Windows-x64.zip',browser_download_url:'zip'},"
-            "{name:'Saveo-Setup.exe',browser_download_url:'exe'}]}));"
+            "{name:'Saveo-Setup.exe',browser_download_url:'exe'}]};"
+            "console.log(window.__saveoPickAsset(rel,'.exe')+' '+window.__saveoPickAsset(rel,'.apk'));"
         )
         for exe in ("node", os.environ.get("NODE", "")):
             try:
                 out = subprocess.run([exe, "-e", script], cwd=ROOT, capture_output=True, text=True, timeout=30)
             except (FileNotFoundError, PermissionError):
                 continue
-            self.assertEqual(out.stdout.strip(), "exe", out.stderr)
+            self.assertEqual(out.stdout.strip(), "exe apk", out.stderr)
             return
         self.skipTest("node is not installed")
 

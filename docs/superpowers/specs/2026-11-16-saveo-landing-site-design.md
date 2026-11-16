@@ -51,3 +51,7 @@ Exact spacing, the card iconography (text/emoji vs inline SVG), and the screensh
 ## Update 2026-11-16 — Windows auto-detect
 
 Requested by the owner: on a Windows visitor, the download buttons must hand over the latest installer (`.exe`) directly instead of the release page. Implemented as one optional script that reads the latest GitHub release and rewrites the links; non-Windows visitors and anyone with JavaScript off keep the release page. The version pill also takes the released tag, so it cannot drift from the shipped build.
+
+## Update 2026-11-16 — Android download
+
+The Android build is linked next to the Windows one as a secondary CTA ("experimental"), and the script rewrites it to the latest `.apk` asset the same way. Each button always targets its own platform's asset, whatever the visitor runs; the visitor's platform only decides which one the header button uses and which label is made explicit.
