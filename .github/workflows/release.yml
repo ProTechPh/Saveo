@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release Tag (e.g. v1.4.4)'
+        description: 'Release Tag (e.g. v1.4.5)'
         required: false
         default: ''
 
@@ -17,9 +17,41 @@ permissions:
   contents: write
 
 jobs:
+  # ---------------- 0. VERSION CALCULATION & AUTO-INCREMENT ----------------
+  prepare-version:
+    name: Calculate Release Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.calc.outputs.version }}
+      tag: ${{ steps.calc.outputs.tag }}
+      version_code: ${{ steps.calc.outputs.version_code }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Calculate Next Version
+        id: calc
+        env:
+          CUSTOM_TAG: ${{ inputs.tag_name }}
+        run: |
+          python3 scripts/calculate_version.py \
+            --event "${{ github.event_name }}" \
+            --ref-type "${{ github.ref_type }}" \
+            --ref-name "${{ github.ref_name }}" \
+            --custom-tag "$CUSTOM_TAG"
+
   # ---------------- 1. WINDOWS STANDALONE BUILD (STABLE) ----------------
   build-windows:
     name: Build Windows (x64)
+    needs: prepare-version
     runs-on: windows-latest
 
     steps:
@@ -45,24 +77,12 @@ jobs:
       - name: Configure Version Metadata
         shell: pwsh
         run: |
-          $verFromFile = (Get-Content -Path VERSION -ErrorAction SilentlyContinue)
-          if ($verFromFile) { $verFromFile = $verFromFile.Trim() }
-          if (-not $verFromFile) { $verFromFile = "1.4.4" }
-
-          $tag = ""
-          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.tag_name }}") {
-            $tag = "${{ inputs.tag_name }}"
-          } elseif ("${{ github.ref_type }}" -eq "tag") {
-            $tag = "${{ github.ref_name }}"
-          } else {
-            $tag = "v$verFromFile"
-          }
-          if (-not $tag -or $tag -eq "") { $tag = "v$verFromFile" }
-          $tagClean = $tag.TrimStart('v')
-          Write-Host "Configuring Saveo version: $tag (Clean: $tagClean)"
-          Set-Content -Path VERSION -Value $tagClean
+          $ver = "${{ needs.prepare-version.outputs.version }}"
+          $tag = "${{ needs.prepare-version.outputs.tag }}"
+          Write-Host "Configuring Saveo version: $tag (Clean: $ver)"
+          Set-Content -Path VERSION -Value $ver
           "SAVEO_VERSION=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "RELEASE_VERSION_CLEAN=$tagClean" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RELEASE_VERSION_CLEAN=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build Standalone (Windows)
         run: |
@@ -100,9 +120,10 @@ jobs:
             Saveo-Setup.exe
             Saveo-Windows-x64.zip
 
-  # ---------------- 2. ANDROID STANDALONE APK BUILD (EXPERIMENTAL) ----------------
+  # ---------------- 2. ANDROID STANDALONE APK BUILD ----------------
   build-android:
     name: Build Android (APK)
+    needs: prepare-version
     runs-on: ubuntu-latest
     continue-on-error: true
 
@@ -133,11 +154,14 @@ jobs:
       - name: Build Android APK with Gradle
         env:
           PYTHON_BINARY_PATH: ${{ steps.setup-python.outputs.python-path }}
+          APP_VERSION: ${{ needs.prepare-version.outputs.version }}
+          APP_VERSION_CODE: ${{ needs.prepare-version.outputs.version_code }}
         run: |
           cd android
           PY_BIN="${{ steps.setup-python.outputs.python-path }}"
           echo "Using Python binary for Chaquopy: $PY_BIN"
-          ./gradlew assembleRelease -PpythonBinary="$PY_BIN" --no-daemon --stacktrace
+          echo "Building Saveo APK version: $APP_VERSION (versionCode: $APP_VERSION_CODE)"
+          ./gradlew assembleRelease -PpythonBinary="$PY_BIN" -PversionName="$APP_VERSION" -PversionCode="$APP_VERSION_CODE" --no-daemon --stacktrace
           cd ..
           APK_FILE=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
           if [ -z "$APK_FILE" ]; then
@@ -156,13 +180,15 @@ jobs:
   # ---------------- 3. PUBLISH TO GITHUB RELEASE ----------------
   publish-release:
     name: Publish Release Assets
-    needs: [build-windows, build-android]
+    needs: [prepare-version, build-windows, build-android]
     runs-on: ubuntu-latest
     if: (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && !cancelled() && needs.build-windows.result == 'success'
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download all compiled artifacts
         uses: actions/download-artifact@v4
@@ -173,34 +199,28 @@ jobs:
       - name: List Release Assets
         run: ls -la release-assets
 
-      - name: Determine Release Tag
-        id: release_tag
-        run: |
-          if [ -f VERSION ]; then
-            FILE_VER=$(cat VERSION | tr -d ' \r\n')
-          else
-            FILE_VER="1.4.4"
-          fi
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag_name }}" ]; then
-            TAG="${{ inputs.tag_name }}"
-          elif [ "${{ github.ref_type }}" = "tag" ]; then
-            TAG="${{ github.ref_name }}"
-          else
-            TAG="v$FILE_VER"
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-
       - name: Generate Release Notes
-        run: python3 scripts/generate_release_notes.py "${{ steps.release_tag.outputs.tag }}"
+        run: python3 scripts/generate_release_notes.py "${{ needs.prepare-version.outputs.tag }}"
 
       - name: Upload Assets to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_tag.outputs.tag }}
+          tag_name: ${{ needs.prepare-version.outputs.tag }}
           files: release-assets/*
-          name: Saveo ${{ steps.release_tag.outputs.tag }} - Windows & Android Release
+          name: Saveo ${{ needs.prepare-version.outputs.tag }} - Windows & Android Release
           body_path: release_body.md
           make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync VERSION file back to main branch
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          echo "${{ needs.prepare-version.outputs.version }}" > VERSION
+          git add VERSION
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): bump version to ${{ needs.prepare-version.outputs.tag }} [skip ci]"
+            git push origin main
+          fi
