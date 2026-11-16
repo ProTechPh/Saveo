@@ -1979,7 +1979,9 @@ class SaveoApp {
       if (metricEta) metricEta.textContent = '--:--';
       if (metricSize) metricSize.textContent = `${task.downloaded_str || '0 B'} / ${task.total_str || '0 B'} (Paused)`;
     } else if (isProcessing) {
-      if (metricSize) metricSize.textContent = `Encoding ${audioFmt}${targetSizeClean ? ` (~${targetSizeClean})` : ''}`;
+      if (metricSize) metricSize.textContent = isAudio
+        ? `Encoding ${audioFmt}${targetSizeClean ? ` (~${targetSizeClean})` : ''}`
+        : 'Merging video + audio...';
       if (metricSpeed) metricSpeed.textContent = task.speed_str || 'Post-processing';
       if (metricEta) metricEta.textContent = task.eta_str || 'A few seconds';
     } else {
