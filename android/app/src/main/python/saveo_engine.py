@@ -710,9 +710,11 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
     stream_file = None
     stream_count = 1
     count_known = False
+    last_speed = 0
+    last_eta = 0
 
     def hook(d):
-        nonlocal downloaded_filepath, last_progress_time, stream_index, stream_file, stream_count, count_known
+        nonlocal downloaded_filepath, last_progress_time, stream_index, stream_file, stream_count, count_known, last_speed, last_eta
         global _is_cancelled, _is_paused
         if _is_paused:
             # DO NOT delete partial files! Keep .part file intact for resume
@@ -735,6 +737,7 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         if fn and fn != stream_file:
             if stream_file is not None:
                 stream_index += 1
+                last_speed = last_eta = 0
             stream_file = fn
             if not count_known:
                 # A video-only stream is always followed by a separate audio stream that yt-dlp merges
@@ -776,8 +779,14 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
                 return
             last_progress_time = now
 
-            speed = d.get('speed') or 0
-            eta = d.get('eta') or 0
+            speed = d.get('speed') or last_speed
+            eta = d.get('eta') or last_eta
+            # yt-dlp reports 0/None in the gaps between requests; keep the last known values
+            # so speed and ETA don't flash blank while the connection is re-establishing
+            if d.get('speed'):
+                last_speed = d.get('speed')
+            if d.get('eta'):
+                last_eta = d.get('eta')
 
             data = {
                 "status": "downloading",
@@ -813,7 +822,6 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         'fragment_retries': 5,
         'buffersize': 256 * 1024,            # Small read blocks so percent moves in small steps, not 10% jumps
         'noresizebuffer': True,              # Keep blocks small; the hook throttle below caps JNI/WebView load
-        'http_chunk_size': 10485760,         # 10 MB chunks bypass YouTube CDN connection throttling
         'concurrent_fragment_downloads': 4,  # Download up to 4 DASH fragments in parallel for fast mobile throughput
         'extractor_args': {
             'youtube': {
