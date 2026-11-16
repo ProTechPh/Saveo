@@ -459,38 +459,53 @@ def analyze_url(url: str) -> str:
             video_formats = [f for f in raw_formats if f.get('vcodec') != 'none']
 
             def get_best_video_size(target_dim: Optional[int]) -> Optional[int]:
-                if not video_formats:
-                    return None
-                if target_dim is None:
-                    matching = list(video_formats)
-                else:
-                    matching = [f for f in video_formats if get_format_resolution(f) <= target_dim]
-                    if not matching:
-                        matching = [f for f in video_formats if get_format_resolution(f) <= target_dim * 1.05]
-                    if not matching:
-                        return None
+                eff_target = target_dim or 720
 
-                def format_score(f: Dict[str, Any]) -> tuple:
-                    res = get_format_resolution(f)
-                    vc = (f.get('vcodec') or '').lower()
-                    codec_rank = 3 if 'av01' in vc else (2 if 'vp9' in vc or 'vp09' in vc else (1 if 'avc' in vc or 'h264' in vc else 0))
-                    size = f.get('filesize') or f.get('filesize_approx') or 0
-                    bitrate = f.get('tbr') or f.get('vbr') or 0
-                    return (res, codec_rank, size > 0, bitrate)
+                # 1. Search for a stream that genuinely matches this target resolution (+/- 18%)
+                matching = [
+                    f for f in video_formats
+                    if abs(get_format_resolution(f) - eff_target) <= (eff_target * 0.18)
+                ]
 
-                matching.sort(key=format_score, reverse=True)
-                chosen = matching[0]
-                v_size = estimate_format_bytes(chosen, duration)
-                if not v_size and duration and duration > 0:
-                    target_res = target_dim or get_format_resolution(chosen) or 720
-                    typical_kbps = {2160: 6000, 1440: 3800, 1080: 2500, 720: 1400, 480: 750, 360: 450}.get(target_res, 1200)
-                    v_size = int((typical_kbps * 1000 / 8) * float(duration))
+                if matching:
+                    def format_score(f: Dict[str, Any]) -> tuple:
+                        vc = (f.get('vcodec') or '').lower()
+                        codec_rank = 3 if 'av01' in vc else (2 if 'vp9' in vc or 'vp09' in vc else (1 if 'avc' in vc or 'h264' in vc else 0))
+                        size = f.get('filesize') or f.get('filesize_approx') or 0
+                        bitrate = f.get('tbr') or f.get('vbr') or 0
+                        return (size > 0, codec_rank, bitrate)
 
-                if not v_size:
-                    return None
-                if chosen.get('acodec') == 'none' and best_audio_size:
-                    return v_size + best_audio_size
-                return v_size
+                    matching.sort(key=format_score, reverse=True)
+                    chosen = matching[0]
+                    v_size = estimate_format_bytes(chosen, duration)
+                    if v_size and v_size > 0:
+                        if chosen.get('acodec') == 'none' and best_audio_size:
+                            return v_size + best_audio_size
+                        return v_size
+
+                # 2. When an adaptive DASH stream size isn't reported upfront, estimate accurately
+                # based on duration and standard industry video bitrates (matching Windows desktop engine)
+                bitrate_map = {
+                    2160: 4500,  # 4K UHD
+                    1440: 2500,  # 2K QHD
+                    1080: 1600,  # 1080p Full HD
+                    720: 850,    # 720p HD
+                    480: 420,    # 480p SD
+                    360: 240,    # 360p
+                    240: 150,    # 240p
+                    144: 90      # 144p
+                }
+                closest_dim = min(bitrate_map.keys(), key=lambda k: abs(k - eff_target))
+                kbps = bitrate_map.get(closest_dim, 900)
+
+                if duration and duration > 0:
+                    total_kbps = kbps + 128  # video bitrate + 128 kbps audio
+                    return int((total_kbps * 1000 / 8) * float(duration))
+
+                # Proportional estimate when duration is not available
+                scale = {2160: 4.5, 1440: 2.8, 1080: 1.8, 720: 1.0, 480: 0.55, 360: 0.35}.get(closest_dim, 1.0)
+                base = best_audio_size or (35 * 1024 * 1024)
+                return int(base * scale)
 
             # Discover available resolutions
             resolutions = [get_format_resolution(f) for f in video_formats if get_format_resolution(f) > 0]
@@ -544,9 +559,9 @@ def analyze_url(url: str) -> str:
             tier_labels = {
                 "2160p": "4K / 2160p",
                 "1440p": "2K / 1440p",
-                "1080p": "FHD / 1080p",
-                "720p": "720p",
-                "480p": "480p",
+                "1080p": "1080p FHD",
+                "720p": "720p HD",
+                "480p": "480p SD",
                 "360p": "360p",
                 "240p": "240p",
                 "144p": "144p",
