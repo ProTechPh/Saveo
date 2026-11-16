@@ -609,10 +609,10 @@
               </div>
 
               <!-- 6. Notifications & Behavior -->
-              <div class="setting-item">
+              <div class="setting-item setting-item-toggle">
                 <div class="setting-info">
-                  <label>Desktop Notifications</label>
-                  <span>Show a desktop notification banner when long downloads finish.</span>
+                  <label>Notifications</label>
+                  <span>Show a notification banner when long downloads finish.</span>
                 </div>
                 <div class="setting-control">
                   <label class="toggle-switch">
@@ -651,9 +651,11 @@
                 <div class="setting-control dir-setting-control">
                   <input type="text" id="setting-cookie-input" class="text-input" placeholder="No cookies.txt file selected (Optional)" readonly />
                   <input type="file" id="setting-cookie-file-upload" accept=".txt" style="display: none;" />
-                  <button class="secondary-btn" id="btn-settings-browse-cookies">Browse...</button>
-                  <button class="secondary-btn" id="btn-settings-upload-cookies">Upload...</button>
-                  <button class="secondary-btn" id="btn-settings-clear-cookies" title="Remove custom cookies file">Clear</button>
+                  <div class="dir-setting-actions">
+                    <button class="secondary-btn" id="btn-settings-browse-cookies">Browse...</button>
+                    <button class="secondary-btn" id="btn-settings-upload-cookies">Upload...</button>
+                    <button class="secondary-btn" id="btn-settings-clear-cookies" title="Remove custom cookies file">Clear</button>
+                  </div>
                 </div>
               </div>
 
