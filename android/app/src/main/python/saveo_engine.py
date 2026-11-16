@@ -665,9 +665,10 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
 
     os.makedirs(output_dir, exist_ok=True)
     downloaded_filepath = None
+    last_progress_time = 0.0
 
     def hook(d):
-        nonlocal downloaded_filepath
+        nonlocal downloaded_filepath, last_progress_time
         global _is_cancelled, _is_paused
         if _is_paused:
             # DO NOT delete partial files! Keep .part file intact for resume
@@ -691,11 +692,19 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
                 downloaded_filepath = fn
 
         if callback_obj and st == 'downloading':
+            now = time.time()
             total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
             downloaded = d.get('downloaded_bytes') or 0
+            pct = (downloaded / total * 100.0) if total > 0 else 0.0
+
+            # Throttle progress events to ~3-4 per second to prevent JNI / WebView / NotificationManager flooding
+            # which causes CPU stalls, thread blocking, and download pauses on Android
+            if (now - last_progress_time) < 0.25 and pct < 99.5 and downloaded > 0:
+                return
+            last_progress_time = now
+
             speed = d.get('speed') or 0
             eta = d.get('eta') or 0
-            pct = (downloaded / total * 100.0) if total > 0 else 0.0
 
             data = {
                 "status": "downloading",
@@ -726,11 +735,15 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         'nocheckcertificate': True,
         'quiet': True,
         'no_warnings': True,
-        'socket_timeout': 15,
-        'retries': 3,
+        'socket_timeout': 10,
+        'retries': 5,
+        'fragment_retries': 5,
+        'buffersize': 1024 * 1024,           # 1 MB download buffer prevents small-chunk stalls
+        'http_chunk_size': 10485760,         # 10 MB chunks bypass YouTube CDN connection throttling
+        'concurrent_fragment_downloads': 4,  # Download up to 4 DASH fragments in parallel for fast mobile throughput
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'android', 'web'],
+                'player_client': ['ios', 'android'], # Omit 'web' on download so stream starts immediately without JS timeouts
             }
         },
         'http_headers': {
