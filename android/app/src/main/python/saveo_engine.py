@@ -177,6 +177,7 @@ def extract_twitter_syndication(url: str) -> Optional[Dict[str, Any]]:
                 'id': tweet_id,
                 'title': title,
                 'uploader': uploader,
+                'description': raw_title[:300] if raw_title else 'Twitter Video',
                 'duration': duration_sec,
                 'duration_str': format_seconds(duration_sec),
                 'thumbnail': v.get('thumbnail_url') or (data.get('mediaURLs') or [''])[0],
@@ -428,12 +429,19 @@ def analyze_url(url: str) -> str:
                     }
                 ]
 
+                p_desc = (info.get("description") or "").strip()
+                if not p_desc:
+                    p_desc = f"Playlist with {len(entries)} items."
+                elif len(p_desc) > 300:
+                    p_desc = p_desc[:300] + "..."
+
                 result = {
                     "id": str(info.get("id", "playlist")),
                     "url": url,
                     "title": info.get("title", "Untitled Playlist"),
                     "platform": info.get("extractor_key", "Playlist"),
                     "uploader": info.get("uploader", "Various Artists"),
+                    "description": p_desc,
                     "duration": total_duration,
                     "duration_str": format_seconds(total_duration),
                     "thumbnail": info.get("thumbnail") or (entries[0]["thumbnail"] if entries else ""),
@@ -625,12 +633,23 @@ def analyze_url(url: str) -> str:
                 }
             ]
 
+            desc = (info.get("description") or "").strip()
+            if not desc:
+                desc = (info.get("comment") or info.get("summary") or "").strip()
+            if not desc and info.get("uploader"):
+                view_cnt = info.get("view_count")
+                views_str = f" • {view_cnt:,} views" if view_cnt else ""
+                desc = f"Published by {info.get('uploader')}{views_str}"
+            if len(desc) > 300:
+                desc = desc[:300] + "..."
+
             result = {
                 "id": info.get("id", ""),
                 "url": url,
                 "title": info.get("title", "Untitled Media"),
                 "platform": info.get("extractor_key", "Web Media"),
                 "uploader": info.get("uploader", "Unknown Creator"),
+                "description": desc or "No description provided for this media.",
                 "duration": duration,
                 "duration_str": format_seconds(duration),
                 "thumbnail": info.get("thumbnail", ""),
