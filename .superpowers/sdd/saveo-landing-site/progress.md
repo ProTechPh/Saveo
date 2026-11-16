@@ -14,3 +14,9 @@ Final review: fresh subagent reviewer, 5 Important findings, 0 Critical.
 Final: fixed header CTA 36px->44px, fine-print contrast 3.77->7.01, anchor scroll-margin 84px — verified by browser runtime measurement; suite 7/7 green.
 Final: Ruling: phone-width screenshots stand with honest copy — a wider capture is impossible in this environment. Cost if wrong: hero shows the compact layout.
 Final: minor (deferred): hero image lazy (delays LCP), no `prefers-reduced-motion` guard, logo alt redundant inside a labelled link, no og:image card, CSS assertions are substring-based.
+
+Follow-up request: auto-detect Windows and send them the latest .exe directly.
+Ruling: the spec said "no JavaScript" — added one progressive-enhancement file (`site/app.js`) because OS detection and a live release lookup cannot be done statically. Fallback for non-JavaScript and non-Windows visitors is unchanged (release page). Cost if wrong: one extra 1KB request per visitor and a dependency on the GitHub API (falls back silently).
+Ruling: the version pill now follows the published release tag instead of `VERSION`, because the repo's VERSION (1.4.4) already lagged the latest release (v1.4.15); the static text stays as the no-JS fallback and the sync test still guards it. Cost if wrong: pill can disagree with `VERSION` in the repo, never with the build users download.
+Verified at runtime: both CTAs -> releases/download/v1.4.15/Saveo-Setup.exe (HTTP 200, 87.6MB), hero label "Download installer (.exe)", pills v1.4.15, console clean; suite 10/10 green.
+
