@@ -1642,49 +1642,64 @@ class SaveoApp {
       } else if (downloadState === 'ready-to-install') {
         // Trigger install and restart
         btnPrimary.disabled = true;
-        btnPrimaryText.textContent = 'Restarting...';
-
-        const serverPill = document.getElementById('server-status-pill');
-        const serverLabel = document.getElementById('server-status-label');
-        if (serverPill) {
-          serverPill.className = 'header-server-pill status-reconnecting';
-        }
-        if (serverLabel) {
-          serverLabel.textContent = 'Reconnecting...';
-        }
+        btnPrimaryText.textContent = 'Launching Installer...';
 
         try {
           await api.installAndRestart();
           Components.showToast('Launching installer and restarting Saveo...', 'success');
-        } catch (e) {
-          Components.showToast(`Installer error: ${e.message}`, 'error');
-        }
 
-        // Close modal after brief delay and enter reconnecting polling loop
-        setTimeout(() => {
-          modal.style.display = 'none';
-        }, 1500);
+          const serverPill = document.getElementById('server-status-pill');
+          const serverLabel = document.getElementById('server-status-label');
+          if (serverPill) {
+            serverPill.className = 'header-server-pill status-reconnecting';
+          }
+          if (serverLabel) {
+            serverLabel.textContent = 'Updating...';
+          }
 
-        // Poll until server is back online
-        let reconnectAttempts = 0;
-        const reconnectTimer = setInterval(async () => {
-          reconnectAttempts++;
-          try {
-            const st = await api.getSystemStatus();
-            if (st && st.python_version) {
-              clearInterval(reconnectTimer);
-              if (serverPill) serverPill.className = 'header-server-pill status-ready';
-              if (serverLabel) serverLabel.textContent = 'Services Online';
-              Components.showToast('Saveo updated and reconnected!', 'success');
-              await this.loadSystemStatus();
+          // Close modal after brief delay and enter reconnecting polling loop
+          setTimeout(() => {
+            modal.style.display = 'none';
+          }, 1500);
+
+          // Poll until server is back online
+          let reconnectAttempts = 0;
+          const reconnectTimer = setInterval(async () => {
+            reconnectAttempts++;
+            try {
+              const st = await api.getSystemStatus();
+              if (st && st.python_version) {
+                clearInterval(reconnectTimer);
+                if (serverPill) serverPill.className = 'header-server-pill status-ready';
+                if (serverLabel) serverLabel.textContent = 'Services Online';
+                Components.showToast('Saveo updated and reconnected!', 'success');
+                await this.loadSystemStatus();
+              }
+            } catch (e) {
+              // Still restarting
             }
-          } catch (e) {
-            // Still restarting
+            if (reconnectAttempts > 60) {
+              clearInterval(reconnectTimer);
+            }
+          }, 1500);
+
+        } catch (e) {
+          btnPrimary.disabled = false;
+          btnPrimaryText.textContent = 'Install & Restart';
+          Components.showToast(`Installer: ${e.message}`, 'error');
+          if (statusMsg) {
+            statusMsg.style.display = 'block';
+            statusMsg.style.color = '#f59e0b';
+            statusMsg.innerHTML = `${e.message} <br/><a href="#" id="link-open-installer-folder" style="color:var(--accent);text-decoration:underline;display:inline-block;margin-top:6px;font-weight:500;">Open Installer in Downloads</a>`;
+            const openLink = document.getElementById('link-open-installer-folder');
+            if (openLink) {
+              openLink.addEventListener('click', (evt) => {
+                evt.preventDefault();
+                api.openInstallerFolder().catch(() => {});
+              });
+            }
           }
-          if (reconnectAttempts > 60) {
-            clearInterval(reconnectTimer);
-          }
-        }, 1500);
+        }
 
       } else if (downloadState === 'ytdlp-core') {
         // Update / Verify yt-dlp core

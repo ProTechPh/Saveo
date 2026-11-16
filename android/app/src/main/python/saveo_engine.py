@@ -265,8 +265,7 @@ def analyze_url(url: str) -> str:
         'retries': 2,
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'ios', 'web'],
-                'player_skip': ['configs', 'webpage'],
+                'player_client': ['web', 'ios', 'android'],
             }
         },
         'http_headers': {
@@ -287,12 +286,12 @@ def analyze_url(url: str) -> str:
             try:
                 info = ydl.extract_info(url, download=False)
             except Exception as e:
-                # Fallback 1: retry without player_skip if Innertube fastpath failed
+                # Fallback 1: retry with ios/android Innertube clients if web client had issues
                 info = None
                 try:
                     retry_opts = dict(ydl_opts)
                     if 'extractor_args' in retry_opts and 'youtube' in retry_opts['extractor_args']:
-                        retry_opts['extractor_args'] = {'youtube': {'player_client': ['android', 'web']}}
+                        retry_opts['extractor_args'] = {'youtube': {'player_client': ['ios', 'android', 'web']}}
                     with yt_dlp.YoutubeDL(retry_opts) as fb_ydl:
                         info = fb_ydl.extract_info(url, download=False)
                 except Exception:
@@ -706,7 +705,7 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         'retries': 3,
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'ios', 'web'],
+                'player_client': ['web', 'ios', 'android'],
             }
         },
         'http_headers': {
@@ -747,7 +746,7 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         elif f_norm.endswith('p') and f_norm[:-1].isdigit():
             target_h = int(f_norm[:-1])
             if ffmpeg_available:
-                ydl_opts['format'] = f"bestvideo[height<={target_h}]+bestaudio/best[height<={target_h}]/best"
+                ydl_opts['format'] = f"bestvideo[height<={target_h}]+bestaudio/best[height<={target_h}]/bestvideo+bestaudio/best"
                 ydl_opts['merge_output_format'] = 'mp4'
             else:
                 ydl_opts['format'] = (
