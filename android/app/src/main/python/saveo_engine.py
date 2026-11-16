@@ -265,11 +265,11 @@ def analyze_url(url: str) -> str:
         'retries': 2,
         'extractor_args': {
             'youtube': {
-                'player_client': ['web', 'ios', 'android'],
+                'player_client': ['ios', 'android', 'web'],
             }
         },
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
         }
     }
     if is_playlist:
@@ -514,6 +514,16 @@ def analyze_url(url: str) -> str:
             if any(0 < r < 200 for r in resolutions):
                 available_qualities.append("144p")
 
+            # Guaranteed standard quality tiers for YouTube and standard web platforms
+            # Matches Windows Desktop behavior: exposes 1080p, 720p, 480p, 360p so user has full choice
+            is_yt = "youtube" in str(info.get('extractor_key', '')).lower() or "youtu" in url
+            if is_yt or max_res >= 720 or not available_qualities:
+                for std_q in ["1080p", "720p", "480p", "360p"]:
+                    if std_q not in available_qualities:
+                        available_qualities.append(std_q)
+                tier_order = ["2160p", "1440p", "1080p", "720p", "480p", "360p", "240p", "144p"]
+                available_qualities.sort(key=lambda x: tier_order.index(x) if x in tier_order else 99)
+
             # Fallback if no bins matched
             if not available_qualities:
                 if max_res >= 2000:
@@ -705,11 +715,11 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         'retries': 3,
         'extractor_args': {
             'youtube': {
-                'player_client': ['web', 'ios', 'android'],
+                'player_client': ['ios', 'android', 'web'],
             }
         },
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
         }
     }
 
@@ -746,15 +756,20 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         elif f_norm.endswith('p') and f_norm[:-1].isdigit():
             target_h = int(f_norm[:-1])
             if ffmpeg_available:
-                ydl_opts['format'] = f"bestvideo[height<={target_h}]+bestaudio/best[height<={target_h}]/bestvideo+bestaudio/best"
+                ydl_opts['format'] = (
+                    f"bestvideo[height<={target_h}]+bestaudio/"
+                    f"bestvideo[height<={target_h}]+ba/"
+                    f"best[height<={target_h}]/"
+                    f"bestvideo+bestaudio/"
+                    f"best"
+                )
                 ydl_opts['merge_output_format'] = 'mp4'
             else:
                 ydl_opts['format'] = (
                     f"best[height<={target_h}][ext=mp4]/"
                     f"best[height<={target_h}]/"
                     f"best[ext=mp4]/"
-                    f"best/"
-                    f"bestvideo[height<={target_h}]+bestaudio"
+                    f"best"
                 )
         elif '+' in format_id or 'bestvideo' in format_id or 'bestaudio' in format_id:
             if ffmpeg_available:
