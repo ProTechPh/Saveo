@@ -930,6 +930,12 @@ class SaveoAPI {
       method: 'POST'
     });
   }
+
+  async openInstallerFolder() {
+    return this.request('/api/system/open-installer-folder', {
+      method: 'POST'
+    });
+  }
 }
 
 const api = new SaveoAPI();

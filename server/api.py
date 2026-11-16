@@ -986,6 +986,28 @@ def _load_app_version():
 APP_VERSION = _load_app_version()
 
 
+def get_installer_download_path() -> str:
+    r"""
+    Returns a safe, user-accessible path for the downloaded installer.
+    Avoids %TEMP% because Windows 11 Smart App Control / WDAC explicitly blocks
+    executables running from AppData\Local\Temp.
+    """
+    dl_dir = Path.home() / "Downloads"
+    if dl_dir.exists() and os.access(str(dl_dir), os.W_OK):
+        return str(dl_dir / "Saveo-Setup.exe")
+
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        up_dir = Path(local_app_data) / "Saveo" / "updates"
+        try:
+            up_dir.mkdir(parents=True, exist_ok=True)
+            return str(up_dir / "Saveo-Setup.exe")
+        except Exception:
+            pass
+
+    return os.path.join(tempfile.gettempdir(), "Saveo-Setup.exe")
+
+
 class InstallerDownloadManager:
     def __init__(self):
         self.status = "idle"  # "idle", "downloading", "completed", "error", "cancelled"
@@ -1013,7 +1035,7 @@ class InstallerDownloadManager:
             self.speed_bps = 0
             self.percent = 0.0
             self.error_message = ""
-            self.installer_path = os.path.join(tempfile.gettempdir(), "Saveo-Setup.exe")
+            self.installer_path = get_installer_download_path()
 
         threading.Thread(target=self._download_worker, args=(url, gen), daemon=True).start()
 
@@ -1091,6 +1113,24 @@ class InstallerDownloadManager:
                         self.status = "completed"
                         self.percent = 100.0
                         self.speed_bps = 0
+
+                # Automatically unblock the installer on Windows so Application Control / SmartScreen permits execution
+                if sys.platform == "win32" and os.path.exists(self.installer_path):
+                    try:
+                        zone_path = f"{self.installer_path}:Zone.Identifier"
+                        if os.path.exists(zone_path):
+                            os.remove(zone_path)
+                    except Exception:
+                        pass
+                    try:
+                        import subprocess
+                        subprocess.run(
+                            ["powershell", "-NoProfile", "-NonInteractive", "-Command", f"Unblock-File -LiteralPath '{self.installer_path}'"],
+                            capture_output=True,
+                            timeout=5
+                        )
+                    except Exception:
+                        pass
         except Exception as e:
             with self._lock:
                 if self._current_gen == gen:
@@ -1329,9 +1369,51 @@ async def cancel_installer_download_endpoint():
     return {"status": "cancelled"}
 
 
+@app.post("/api/system/open-installer-folder")
+async def open_installer_folder_endpoint():
+    """
+    Opens File Explorer highlighting the downloaded installer file.
+    """
+    path = installer_manager.installer_path
+    if not path or not os.path.exists(path):
+        candidates = [
+            str(Path.home() / "Downloads" / "Saveo-Setup.exe"),
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), "Saveo", "updates", "Saveo-Setup.exe"),
+            os.path.join(tempfile.gettempdir(), "Saveo-Setup.exe")
+        ]
+        for c in candidates:
+            if c and os.path.exists(c):
+                path = c
+                break
+
+    if path and os.path.exists(path):
+        if sys.platform == "win32":
+            subprocess.Popen(f'explorer.exe /select,"{path}"', shell=True)
+            return {"status": "success", "path": path}
+    
+    dl_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+    if os.path.isdir(dl_dir):
+        if sys.platform == "win32":
+            os.startfile(dl_dir)
+            return {"status": "success", "path": dl_dir}
+
+    return {"status": "error", "message": "Installer not found in Downloads folder"}
+
+
 @app.post("/api/system/install-and-restart")
 async def install_and_restart_endpoint():
     path = installer_manager.installer_path
+    if not path or not os.path.exists(path):
+        candidates = [
+            str(Path.home() / "Downloads" / "Saveo-Setup.exe"),
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), "Saveo", "updates", "Saveo-Setup.exe"),
+            os.path.join(tempfile.gettempdir(), "Saveo-Setup.exe")
+        ]
+        for c in candidates:
+            if c and os.path.exists(c):
+                path = c
+                break
+
     if not path or not os.path.exists(path):
         raise HTTPException(status_code=400, detail="Installer file not found. Download it first.")
 
@@ -1339,15 +1421,75 @@ async def install_and_restart_endpoint():
     import threading
     import time
 
-    try:
-        # Launch the Inno Setup installer silently or normally
-        # Using subprocess.Popen allows installer to run independently while Saveo exits
-        subprocess.Popen([path], shell=False)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to launch installer: {e}")
+    # Unblock the file on Windows to satisfy SmartScreen & Mark of the Web
+    if sys.platform == "win32":
+        try:
+            zone_path = f"{path}:Zone.Identifier"
+            if os.path.exists(zone_path):
+                os.remove(zone_path)
+        except Exception:
+            pass
+
+        try:
+            subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", f"Unblock-File -LiteralPath '{path}'"],
+                capture_output=True,
+                timeout=5
+            )
+        except Exception:
+            pass
+
+    launched = False
+    last_err = None
+
+    if sys.platform == "win32":
+        # Strategy 1: os.startfile (ShellExecuteW)
+        # Bypasses CreateProcessW restriction and allows Windows Shell to prompt for UAC / SAC consent
+        try:
+            os.startfile(path)
+            launched = True
+        except Exception as e1:
+            last_err = e1
+
+        # Strategy 2: cmd /c start "" "path"
+        if not launched:
+            try:
+                subprocess.Popen(f'start "" "{path}"', shell=True)
+                launched = True
+            except Exception as e2:
+                last_err = e2
+
+        # Strategy 3: explorer.exe "path"
+        if not launched:
+            try:
+                subprocess.Popen(["explorer.exe", path])
+                launched = True
+            except Exception as e3:
+                last_err = e3
+
+        # Strategy 4: If still blocked by Application Control policy (WinError 4551),
+        # highlight the file in Explorer so user can launch it directly with double-click
+        if not launched:
+            try:
+                subprocess.Popen(f'explorer.exe /select,"{path}"', shell=True)
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"Windows Application Control blocked automated execution ({last_err}). "
+                    f"The installer is ready in: {path}. Please run it from File Explorer."
+                )
+            )
+    else:
+        try:
+            subprocess.Popen([path], shell=False)
+            launched = True
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to launch installer: {e}")
 
     def _exit_app():
-        time.sleep(1.0)
+        time.sleep(1.2)
         os._exit(0)
 
     threading.Thread(target=_exit_app, daemon=True).start()
