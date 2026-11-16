@@ -17,6 +17,10 @@ _is_cancelled = False
 _is_paused = False
 _ffmpeg_binary_path = None
 
+# 'default' lets yt-dlp use its no-JS client (visionos) with full adaptive formats; 'android'
+# stays as a fallback so videos that reject that client still extract (360p cap) instead of failing.
+_YOUTUBE_CLIENTS = ['default', 'android']
+
 
 class DownloadPausedException(Exception):
     pass
@@ -267,7 +271,7 @@ def analyze_url(url: str) -> str:
         'retries': 2,
         'extractor_args': {
             'youtube': {
-                'player_client': ['default'],
+                'player_client': _YOUTUBE_CLIENTS,
             }
         },
         'http_headers': {
@@ -293,7 +297,7 @@ def analyze_url(url: str) -> str:
                 try:
                     retry_opts = dict(ydl_opts)
                     if 'extractor_args' in retry_opts and 'youtube' in retry_opts['extractor_args']:
-                        retry_opts['extractor_args'] = {'youtube': {'player_client': ['default']}}
+                        retry_opts['extractor_args'] = {'youtube': {'player_client': _YOUTUBE_CLIENTS}}
                     with yt_dlp.YoutubeDL(retry_opts) as fb_ydl:
                         info = fb_ydl.extract_info(url, download=False)
                 except Exception:
@@ -763,9 +767,7 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         'concurrent_fragment_downloads': 4,  # Download up to 4 DASH fragments in parallel for fast mobile throughput
         'extractor_args': {
             'youtube': {
-                # Let yt-dlp pick its no-JS clients (visionos) instead of forcing ios/android,
-                # which only serve the 360p progressive stream and capped every quality at 360p.
-                'player_client': ['default'],
+                'player_client': _YOUTUBE_CLIENTS,
             }
         },
         'http_headers': {
