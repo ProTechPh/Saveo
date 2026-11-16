@@ -691,8 +691,14 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
     downloaded_filepath = None
     last_progress_time = 0.0
 
+    # Track which stream (video / audio) is downloading so the bar shows one continuous 0-100%
+    stream_index = 0
+    stream_file = None
+    stream_count = 1
+    count_known = False
+
     def hook(d):
-        nonlocal downloaded_filepath, last_progress_time
+        nonlocal downloaded_filepath, last_progress_time, stream_index, stream_file, stream_count, count_known
         global _is_cancelled, _is_paused
         if _is_paused:
             # DO NOT delete partial files! Keep .part file intact for resume
@@ -710,20 +716,49 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
             raise Exception("Download cancelled by user.")
 
         st = d.get('status')
+        info = d.get('info_dict') or {}
+        fn = d.get('filename') or d.get('tmpfilename')
+        if fn and fn != stream_file:
+            if stream_file is not None:
+                stream_index += 1
+            stream_file = fn
+            if not count_known:
+                # A video-only stream is always followed by a separate audio stream that yt-dlp merges
+                stream_count = 2 if info.get('vcodec') not in (None, 'none') and info.get('acodec') == 'none' else 1
+                count_known = True
+
         if st == 'finished':
             fn = d.get('filename')
             if fn:
                 downloaded_filepath = fn
+            # Last stream is on disk; yt-dlp is merging video + audio now, so surface that state
+            if callback_obj and count_known and stream_index + 1 >= stream_count:
+                try:
+                    callback_obj.onProgress(json.dumps({
+                        "status": "processing",
+                        "percent": 99.0,
+                        "progress_percent": 99.0,
+                        "downloaded_bytes": d.get('downloaded_bytes') or 0,
+                        "total_bytes": d.get('total_bytes') or 0,
+                        "downloaded_str": format_bytes(d.get('downloaded_bytes') or 0),
+                        "total_str": format_bytes(d.get('total_bytes') or 0),
+                        "speed_str": "Merging / Finalizing",
+                        "eta_str": "A few seconds"
+                    }))
+                except Exception:
+                    pass
 
         if callback_obj and st == 'downloading':
             now = time.time()
             total = d.get('total_bytes') or d.get('total_bytes_estimate') or 0
             downloaded = d.get('downloaded_bytes') or 0
-            pct = (downloaded / total * 100.0) if total > 0 else 0.0
+            frac = (downloaded / total) if total > 0 else 0.0
+            # Weight each stream equally so the percent never resets to 0 when audio starts
+            pct = min(99.0, ((stream_index + frac) / max(1, stream_count)) * 100.0)
 
             # Throttle progress events to ~3-4 per second to prevent JNI / WebView / NotificationManager flooding
             # which causes CPU stalls, thread blocking, and download pauses on Android
-            if (now - last_progress_time) < 0.25 and pct < 99.5 and downloaded > 0:
+            if (now - last_progress_time) < 0.25 and downloaded > 0:
                 return
             last_progress_time = now
 
@@ -762,7 +797,8 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         'socket_timeout': 10,
         'retries': 5,
         'fragment_retries': 5,
-        'buffersize': 1024 * 1024,           # 1 MB download buffer prevents small-chunk stalls
+        'buffersize': 256 * 1024,            # Small read blocks so percent moves in small steps, not 10% jumps
+        'noresizebuffer': True,              # Keep blocks small; the hook throttle below caps JNI/WebView load
         'http_chunk_size': 10485760,         # 10 MB chunks bypass YouTube CDN connection throttling
         'concurrent_fragment_downloads': 4,  # Download up to 4 DASH fragments in parallel for fast mobile throughput
         'extractor_args': {
