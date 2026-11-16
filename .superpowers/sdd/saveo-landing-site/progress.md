@@ -20,3 +20,9 @@ Ruling: the spec said "no JavaScript" — added one progressive-enhancement file
 Ruling: the version pill now follows the published release tag instead of `VERSION`, because the repo's VERSION (1.4.4) already lagged the latest release (v1.4.15); the static text stays as the no-JS fallback and the sync test still guards it. Cost if wrong: pill can disagree with `VERSION` in the repo, never with the build users download.
 Verified at runtime: both CTAs -> releases/download/v1.4.15/Saveo-Setup.exe (HTTP 200, 87.6MB), hero label "Download installer (.exe)", pills v1.4.15, console clean; suite 10/10 green.
 
+Follow-up: the Android build was missing from the site.
+Done: hero now carries a secondary "Download for Android (experimental)" CTA; app.js rewrites it to the latest `.apk` (v1.4.15, 35MB) while the Windows button keeps the `.exe`. The visitor's platform only decides the header button target and which label is made explicit; each button always points at its own platform's file.
+Verified at runtime on Windows: header + Windows CTA -> Saveo-Setup.exe, Android CTA -> Saveo-Android.apk, pills v1.4.15, console clean; suite 9/9 green.
+Not verified: the Android-user branch itself (no Android browser here) — it is a two-line branch on `visitor === 'android'`.
+
+
