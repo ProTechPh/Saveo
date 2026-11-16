@@ -1,5 +1,5 @@
 /**
- * Droply UI Component Renderers & Helpers
+ * Saveo UI Component Renderers & Helpers
  */
 
 const Components = {
@@ -25,18 +25,9 @@ const Components = {
       .replace(/>/g, '&gt;');
   },
 
-  // Platform Icons & Badges
-  getPlatformIcon(platform = '') {
-    const p = platform.toLowerCase();
-    if (p.includes('youtube')) return '▶️';
-    if (p.includes('twitter') || p.includes('x')) return '🐦';
-    if (p.includes('tiktok')) return '🎵';
-    if (p.includes('reddit')) return '🤖';
-    if (p.includes('instagram')) return '📸';
-    if (p.includes('vimeo')) return '🎬';
-    if (p.includes('soundcloud')) return '🎧';
-    if (p.includes('direct')) return '📁';
-    return '🌐';
+  // Platform icon (neutral mark; no emoji)
+  getPlatformIcon() {
+    return '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="5" width="19" height="14" rx="2"></rect><path d="M2.5 9h19"></path><path d="M10 12.5l4 2.5-4 2.5z" fill="currentColor" stroke="none"></path></svg>';
   },
 
   // Toast Notification
@@ -49,11 +40,11 @@ const Components = {
     
     let iconSvg = '';
     if (type === 'success') {
-      iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+      iconSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
     } else if (type === 'error') {
-      iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
+      iconSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>`;
     } else {
-      iconSvg = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+      iconSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
     }
 
     toast.innerHTML = `${iconSvg}<span>${message}</span>`;
@@ -67,7 +58,7 @@ const Components = {
     }, duration);
   },
 
-  // Render Format Chips for Video (Droply Modern Style)
+  // Render Format Chips for Video (Saveo Modern Style)
   renderVideoFormats(formats, selectedFormatId, onSelect) {
     const container = document.getElementById('video-formats-grid');
     if (!container) return;
@@ -77,7 +68,7 @@ const Components = {
     if (existingDropdown) existingDropdown.remove();
 
     if (!formats || formats.length === 0) {
-      container.innerHTML = `<div style="grid-column: 1/-1; color: var(--text-muted); font-size: 13px;">Default source video stream will be downloaded.</div>`;
+      container.innerHTML = `<div style="grid-column: 1/-1; color: var(--fg-dim); font-size: 12px;">Default source stream will be downloaded.</div>`;
       return;
     }
 
@@ -85,7 +76,7 @@ const Components = {
     const initialSelectedId = selectedFormatId || defaultFmt.format_id;
     if (!selectedFormatId && formats.length > 0) {
       onSelect(defaultFmt);
-      const sizeEl = document.getElementById('droply-estimated-size');
+      const sizeEl = document.getElementById('saveo-estimated-size');
       if (sizeEl) sizeEl.textContent = defaultFmt.filesize_str || 'Standard';
     }
 
@@ -93,7 +84,7 @@ const Components = {
       const isSelected = (fmt.format_id === initialSelectedId);
       const chip = document.createElement('button');
       chip.type = 'button';
-      chip.className = `droply-quality-chip ${isSelected ? 'selected' : ''}`;
+      chip.className = `saveo-quality-chip ${isSelected ? 'selected' : ''}`;
       chip.setAttribute('data-fid', fmt.format_id);
 
       chip.innerHTML = `
@@ -102,9 +93,9 @@ const Components = {
       `;
 
       chip.addEventListener('click', () => {
-        container.querySelectorAll('.droply-quality-chip').forEach(c => c.classList.remove('selected'));
+        container.querySelectorAll('.saveo-quality-chip').forEach(c => c.classList.remove('selected'));
         chip.classList.add('selected');
-        const sizeEl = document.getElementById('droply-estimated-size');
+        const sizeEl = document.getElementById('saveo-estimated-size');
         if (sizeEl) sizeEl.textContent = fmt.filesize_str || 'Standard';
         onSelect(fmt);
       });
@@ -113,7 +104,7 @@ const Components = {
     });
   },
 
-  // Render Audio Codec Chips (Droply Modern Style)
+  // Render Audio Codec Chips (Saveo Modern Style)
   renderAudioFormats(formats, selectedFormatId, onSelect) {
     const container = document.getElementById('audio-formats-grid');
     if (!container) return;
@@ -131,7 +122,7 @@ const Components = {
       const isSelected = (fmt.format_id === initialSelectedId);
       const chip = document.createElement('button');
       chip.type = 'button';
-      chip.className = `droply-quality-chip ${isSelected ? 'selected' : ''}`;
+      chip.className = `saveo-quality-chip ${isSelected ? 'selected' : ''}`;
       chip.setAttribute('data-fid', fmt.format_id);
 
       chip.innerHTML = `
@@ -140,9 +131,9 @@ const Components = {
       `;
 
       chip.addEventListener('click', () => {
-        container.querySelectorAll('.droply-quality-chip').forEach(c => c.classList.remove('selected'));
+        container.querySelectorAll('.saveo-quality-chip').forEach(c => c.classList.remove('selected'));
         chip.classList.add('selected');
-        const sizeEl = document.getElementById('droply-estimated-size');
+        const sizeEl = document.getElementById('saveo-estimated-size');
         if (sizeEl) sizeEl.textContent = fmt.filesize_str || '~3.5 MB';
         onSelect(fmt);
       });
@@ -174,13 +165,13 @@ const Components = {
     return h > 0 ? `${pad(h)}:${pad(remM)}:${pad(remS)}` : `${pad(remM)}:${pad(remS)}`;
   },
 
-  // Render Queue / Recent Download Card (Droply Modern Style)
+  // Render Queue / Recent Download Card (Saveo Modern Style)
   renderQueueItem(task) {
     const card = document.createElement('div');
     card.id = `q-task-${task.id}`;
 
     if (task.status === 'completed') {
-      card.className = 'droply-recent-card';
+      card.className = 'saveo-recent-card';
       const isAudio = Boolean(task.is_audio);
       const tagType = isAudio ? 'AUDIO' : 'VIDEO';
       const tagText = isAudio ? 'Music • Tap to play' : 'Movies • Tap to watch';
@@ -190,18 +181,18 @@ const Components = {
       const safeTitle = this.escapeHtml(task.title || 'Downloaded Media');
 
       card.innerHTML = `
-        <button class="droply-play-badge" data-action="open-file" data-path="${safePath}" data-id="${safeId}" title="Tap to play">
+        <button class="saveo-play-badge" data-action="open-file" data-path="${safePath}" data-id="${safeId}" title="Tap to play">
           <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>
         </button>
-        <div class="droply-recent-info" data-action="open-file" data-path="${safePath}" data-id="${safeId}">
-          <div class="droply-recent-title" title="${safeTitleAttr}">${safeTitle}</div>
-          <div class="droply-recent-sub">
-            <span class="droply-tag-pill ${isAudio ? 'audio' : 'video'}">${tagType}</span>
-            <span class="droply-tag-text">${tagText}</span>
+        <div class="saveo-recent-info" data-action="open-file" data-path="${safePath}" data-id="${safeId}">
+          <div class="saveo-recent-title" title="${safeTitleAttr}">${safeTitle}</div>
+          <div class="saveo-recent-sub">
+            <span class="saveo-tag-pill ${isAudio ? 'audio' : 'video'}">${tagType}</span>
+            <span class="saveo-tag-text">${tagText}</span>
           </div>
         </div>
-        <div class="droply-recent-actions">
-          <button class="btn-droply-open" data-action="open-file" data-path="${safePath}" data-id="${safeId}">
+        <div class="saveo-recent-actions">
+          <button class="btn-saveo-open" data-action="open-file" data-path="${safePath}" data-id="${safeId}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
             <span>Open</span>
           </button>
@@ -248,14 +239,25 @@ const Components = {
         <div class="queue-item-meta-row">
           ${metaRowContent}
         </div>
-        ${task.error_friendly ? `<div class="queue-item-error-msg" style="font-size: 11.5px; color: #f87171; line-height: 1.4;">${task.error_friendly}</div>` : ''}
+        ${task.error_friendly ? `<div class="queue-item-error-msg">${task.error_friendly}</div>` : ''}
       </div>
-      <div class="queue-item-actions">
+      <div class="queue-item-actions" data-action-key="${this._actionKey(task)}">
         ${actionButtons}
       </div>
     `;
 
     return card;
+  },
+
+  // Identifies which set of action buttons a status needs. Rebuilding the
+  // buttons on every progress tick destroys them mid-click, so the DOM is
+  // only touched when this key changes.
+  _actionKey(task) {
+    if (task.status === 'downloading' || task.status === 'processing') return 'active';
+    if (task.status === 'paused') return 'paused';
+    if (task.status === 'failed' || task.status === 'cancelled') return 'retry';
+    if (task.status === 'completed') return 'completed';
+    return 'queued';
   },
 
   _getQueueItemActions(task) {
@@ -292,7 +294,7 @@ const Components = {
       const safePath = this.escapeAttr(task.file_path || '');
       const safeId = this.escapeAttr(task.id || '');
       return `
-        <button class="btn-droply-open" data-action="open-file" data-path="${safePath}" data-id="${safeId}">
+        <button class="btn-saveo-open" data-action="open-file" data-path="${safePath}" data-id="${safeId}">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
           <span>Open</span>
         </button>
@@ -312,27 +314,27 @@ const Components = {
   _getQueueItemMeta(task) {
     if (task.status === 'paused') {
       return `
-        <span style="color: #fbbf24; font-weight: 600;">Download Paused (${task.percent ? task.percent.toFixed(1) : '0.0'}%)</span>
-        <span style="color: #a5b4fc;">${task.format_label || ''}</span>
+        <span class="meta-warn">Download Paused (${task.percent ? task.percent.toFixed(1) : '0.0'}%)</span>
+        <span class="meta-format">${task.format_label || ''}</span>
       `;
     }
     if (task.status === 'cancelled') {
       return `
-        <span style="color: #fbbf24; font-weight: 600;">Download Cancelled</span>
-        <span style="color: #a5b4fc;">${task.format_label || ''}</span>
+        <span class="meta-warn">Download Cancelled</span>
+        <span class="meta-format">${task.format_label || ''}</span>
       `;
     }
     if (task.status === 'failed') {
       return `
-        <span style="color: #f87171; font-weight: 600;">Download Failed</span>
-        <span style="color: #a5b4fc;">${task.format_label || ''}</span>
+        <span class="meta-bad">Download Failed</span>
+        <span class="meta-format">${task.format_label || ''}</span>
       `;
     }
     if (task.status === 'completed') {
       return `
-        <span style="color: #34d399; font-weight: 600;">Completed (100%)</span>
+        <span class="meta-good">Completed (100%)</span>
         <span>${task.file_size_str || task.total_str || ''}</span>
-        <span style="color: #a5b4fc;">${task.format_label || ''}</span>
+        <span class="meta-format">${task.format_label || ''}</span>
       `;
     }
     if (task.status === 'processing') {
@@ -341,9 +343,9 @@ const Components = {
       const encLabel = isAudio ? `Encoding ${audioFmt}` : 'Merging Streams';
       const targetStr = task.expected_size_str ? ` (~${task.expected_size_str.split('•')[0].trim()})` : '';
       return `
-        <span style="color: #60a5fa; font-weight: 600;">${encLabel}${targetStr}</span>
+        <span class="meta-info">${encLabel}${targetStr}</span>
         <span>${task.speed_str || 'Finalizing...'}</span>
-        <span style="color: #a5b4fc;">${task.format_label || ''}</span>
+        <span class="meta-format">${task.format_label || ''}</span>
       `;
     }
     const isAudio = Boolean(task.is_audio);
@@ -357,7 +359,7 @@ const Components = {
       <span>${task.speed_str || '-- KB/s'}</span>
       <span>${task.downloaded_str || '0 B'} / ${task.total_str || '0 B'}${targetHint}</span>
       <span>ETA: ${task.eta_str || '--:--'}</span>
-      <span style="color: #a5b4fc;">${task.format_label || ''}</span>
+      <span class="meta-format">${task.format_label || ''}</span>
     `;
   },
 
@@ -366,8 +368,8 @@ const Components = {
     const el = document.getElementById(`q-task-${task.id}`);
     if (!el) return false;
 
-    // If transitioned to completed, replace with Droply completed card!
-    if (task.status === 'completed' && !el.classList.contains('droply-recent-card')) {
+    // If transitioned to completed, replace with Saveo completed card!
+    if (task.status === 'completed' && !el.classList.contains('saveo-recent-card')) {
       const newCard = this.renderQueueItem(task);
       el.replaceWith(newCard);
       return true;
@@ -389,12 +391,17 @@ const Components = {
 
     const metaRow = el.querySelector('.queue-item-meta-row');
     if (metaRow) {
-      metaRow.innerHTML = this._getQueueItemMeta(task);
+      const metaHtml = this._getQueueItemMeta(task);
+      if (metaRow.innerHTML !== metaHtml) metaRow.innerHTML = metaHtml;
     }
 
     const actionsEl = el.querySelector('.queue-item-actions');
     if (actionsEl) {
-      actionsEl.innerHTML = this._getQueueItemActions(task);
+      const actionKey = this._actionKey(task);
+      if (actionsEl.dataset.actionKey !== actionKey) {
+        actionsEl.innerHTML = this._getQueueItemActions(task);
+        actionsEl.dataset.actionKey = actionKey;
+      }
     }
 
     let errEl = el.querySelector('.queue-item-error-msg');
@@ -402,7 +409,7 @@ const Components = {
       if (!errEl) {
         errEl = document.createElement('div');
         errEl.className = 'queue-item-error-msg';
-        errEl.style.cssText = 'font-size: 11.5px; color: #f87171; line-height: 1.4;';
+        
         const info = el.querySelector('.queue-item-info');
         if (info) info.appendChild(errEl);
       }
@@ -433,6 +440,7 @@ const Components = {
     const title = String(item.filename || item.title || 'Downloaded Media');
     const filePath = item.file_path ? String(item.file_path) : '';
     const itemId = String(item.id || '');
+    const icon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="5" width="19" height="14" rx="2"></rect><path d="M2.5 9h19"></path></svg>';
 
     const safeThumb = this.escapeAttr(thumbSrc);
     const safeTitle = this.escapeHtml(title);
@@ -452,7 +460,7 @@ const Components = {
         <div class="history-filename" title="${safeTitleAttr}">${safeTitle}</div>
         <div class="history-meta-sub">
           <span class="history-platform-badge">${safePlatform}</span>
-          <span class="droply-tag-pill ${isAudio ? 'audio' : 'video'}">${isAudio ? 'AUDIO' : 'VIDEO'}</span>
+          <span class="saveo-tag-pill ${isAudio ? 'audio' : 'video'}">${isAudio ? 'AUDIO' : 'VIDEO'}</span>
           ${sizeStr ? `<span>${safeSize}</span>` : ''}
           ${formatLabel ? `<span class="history-format-pill">${safeFormat}</span>` : ''}
           ${safeDate ? `<span>${safeDate}</span>` : ''}
@@ -460,7 +468,7 @@ const Components = {
       </div>
       <div class="history-actions">
         ${filePath ? `
-          <button class="btn-droply-open" data-action="open-file" data-path="${safePath}" data-id="${safeId}" title="Open with compatible app">
+          <button class="btn-saveo-open" data-action="open-file" data-path="${safePath}" data-id="${safeId}" title="Open with compatible app">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
             <span>Open</span>
           </button>
@@ -474,10 +482,10 @@ const Components = {
     return card;
   },
 
-  // Render Droply Playlist Card with Quality Selection & Full Video List
+  // Render Saveo Playlist Card with Quality Selection & Full Video List
   renderPlaylistCard(data, onDownloadSelected) {
     const card = document.createElement('div');
-    card.className = 'droply-playlist-card';
+    card.className = 'saveo-playlist-card';
 
     const entries = data.playlist_entries || [];
     const count = data.playlist_count || entries.length;
@@ -550,69 +558,69 @@ const Components = {
 
     card.innerHTML = `
       <!-- TOP PLAYLIST HEADER -->
-      <div class="droply-playlist-header">
-        ${thumb ? `<img src="${thumb}" alt="thumb" class="droply-playlist-thumb" />` : `<div class="droply-playlist-thumb placeholder">📑</div>`}
-        <div class="droply-playlist-info">
-          <div class="droply-playlist-badge">
+      <div class="saveo-playlist-header">
+        ${thumb ? `<img src="${thumb}" alt="thumb" class="saveo-playlist-thumb" />` : `<div class="saveo-playlist-thumb placeholder">PL</div>`}
+        <div class="saveo-playlist-info">
+          <div class="saveo-playlist-badge">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             <span>Playlist • ${count} Videos</span>
           </div>
-          <h3 class="droply-playlist-title">${data.title || 'Playlist'}</h3>
-          <div class="droply-playlist-author">Curated by <span>${data.uploader || 'Creator'}</span> • Total duration: ${data.duration_str || 'Various'}</div>
+          <h3 class="saveo-playlist-title">${data.title || 'Playlist'}</h3>
+          <div class="saveo-playlist-author">Curated by <span>${data.uploader || 'Creator'}</span> • Total duration: ${data.duration_str || 'Various'}</div>
         </div>
       </div>
 
       <!-- PLAYLIST QUALITY SELECTOR (Applied to all videos at once!) -->
-      <div class="droply-playlist-quality-wrap">
-        <label class="droply-sublabel">Select Download Quality:</label>
-        <div class="droply-quality-chips-grid">
-          <button class="droply-q-chip" data-quality="2160p">
+      <div class="saveo-playlist-quality-wrap">
+        <label class="saveo-sublabel">Select Download Quality:</label>
+        <div class="saveo-quality-chips-grid">
+          <button class="saveo-q-chip" data-quality="2160p">
             <span class="q-label">4K UHD</span>
             <span class="q-est">~2160p</span>
           </button>
-          <button class="droply-q-chip" data-quality="1440p">
+          <button class="saveo-q-chip" data-quality="1440p">
             <span class="q-label">2K QHD</span>
             <span class="q-est">~1440p</span>
           </button>
-          <button class="droply-q-chip" data-quality="1080p">
+          <button class="saveo-q-chip" data-quality="1080p">
             <span class="q-label">Full HD 1080p</span>
             <span class="q-est">~FHD</span>
           </button>
-          <button class="droply-q-chip" data-quality="720p">
+          <button class="saveo-q-chip" data-quality="720p">
             <span class="q-label">HD 720p</span>
             <span class="q-est">~Standard</span>
           </button>
-          <button class="droply-q-chip" data-quality="480p">
+          <button class="saveo-q-chip" data-quality="480p">
             <span class="q-label">Standard 480p</span>
             <span class="q-est">~SD</span>
           </button>
-          <button class="droply-q-chip active" data-quality="best">
+          <button class="saveo-q-chip active" data-quality="best">
             <span class="q-label">Best Auto</span>
             <span class="q-est">~Top Quality</span>
           </button>
-          <button class="droply-q-chip" data-quality="audio_mp3">
+          <button class="saveo-q-chip" data-quality="audio_mp3">
             <span class="q-label">Audio Only (MP3)</span>
             <span class="q-est">~320k</span>
           </button>
-          <button class="droply-q-chip" data-quality="audio_m4a">
+          <button class="saveo-q-chip" data-quality="audio_m4a">
             <span class="q-label">Audio Only (M4A)</span>
             <span class="q-est">~HQ AAC</span>
           </button>
         </div>
 
         <!-- ESTIMATED SIZE BANNER -->
-        <div class="droply-size-banner">
+        <div class="saveo-size-banner">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
           <span>Estimated Download Size: <strong id="playlist-est-size">${calcTotalEstimatedSize()}</strong></span>
         </div>
       </div>
 
       <!-- SELECTION CONTROLS HEADER -->
-      <div class="droply-selection-bar">
-        <div class="droply-selection-count">
+      <div class="saveo-selection-bar">
+        <div class="saveo-selection-count">
           <span id="playlist-selected-count">${selectedIndices.size}</span> of ${count} videos selected
         </div>
-        <div class="droply-selection-btns">
+        <div class="saveo-selection-btns">
           <button class="text-action-btn" id="btn-select-all">Select All</button>
           <span class="divider">|</span>
           <button class="text-action-btn" id="btn-deselect-all">Deselect All</button>
@@ -620,12 +628,12 @@ const Components = {
       </div>
 
       <!-- SCROLLABLE LIST OF ALL PLAYLIST VIDEOS -->
-      <div class="droply-playlist-scrollable" id="playlist-videos-container">
+      <div class="saveo-playlist-scrollable" id="playlist-videos-container">
         ${renderVideoRows()}
       </div>
 
       <!-- PRIMARY DOWNLOAD ACTION -->
-      <div class="droply-playlist-footer">
+      <div class="saveo-playlist-footer">
         <button class="primary-btn btn-download-playlist-now" id="btn-download-playlist-now">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           <span id="btn-download-playlist-text">Download Playlist (${selectedIndices.size} Videos • ${calcTotalEstimatedSize()})</span>
@@ -662,9 +670,9 @@ const Components = {
     };
 
     // Quality chip click handlers
-    card.querySelectorAll('.droply-q-chip').forEach(chip => {
+    card.querySelectorAll('.saveo-q-chip').forEach(chip => {
       chip.addEventListener('click', () => {
-        card.querySelectorAll('.droply-q-chip').forEach(c => c.classList.remove('active'));
+        card.querySelectorAll('.saveo-q-chip').forEach(c => c.classList.remove('active'));
         chip.classList.add('active');
 
         selectedQuality = chip.getAttribute('data-quality');
@@ -747,7 +755,7 @@ const Components = {
   // Render Batch URLs Card (for multiple pasted links)
   renderBatchCard(batchData, onDownloadSelected) {
     const card = document.createElement('div');
-    card.className = 'droply-playlist-card droply-batch-card';
+    card.className = 'saveo-playlist-card saveo-batch-card';
 
     const items = batchData.items || [];
     const selectedIndices = new Set(items.map((_, i) => i));
@@ -756,59 +764,59 @@ const Components = {
     let audioFormat = 'mp3';
 
     card.innerHTML = `
-      <div class="droply-playlist-header">
-        <div class="droply-playlist-thumb placeholder">🔗</div>
-        <div class="droply-playlist-info">
-          <div class="droply-playlist-badge">
+      <div class="saveo-playlist-header">
+        <div class="saveo-playlist-thumb placeholder">URL</div>
+        <div class="saveo-playlist-info">
+          <div class="saveo-playlist-badge">
             <span>Multiple Media Links • ${items.length} URLs</span>
           </div>
-          <h3 class="droply-playlist-title">Batch Download Links</h3>
-          <div class="droply-playlist-author">All recognized video and audio URLs will download directly.</div>
+          <h3 class="saveo-playlist-title">Batch Download Links</h3>
+          <div class="saveo-playlist-author">All recognized video and audio URLs will download directly.</div>
         </div>
       </div>
 
-      <div class="droply-playlist-quality-wrap">
-        <label class="droply-sublabel">Select Download Quality Preset:</label>
-        <div class="droply-quality-chips-grid">
-          <button class="droply-q-chip" data-quality="2160p">
+      <div class="saveo-playlist-quality-wrap">
+        <label class="saveo-sublabel">Select Download Quality Preset:</label>
+        <div class="saveo-quality-chips-grid">
+          <button class="saveo-q-chip" data-quality="2160p">
             <span class="q-label">4K 2160p</span>
           </button>
-          <button class="droply-q-chip" data-quality="1440p">
+          <button class="saveo-q-chip" data-quality="1440p">
             <span class="q-label">2K 1440p</span>
           </button>
-          <button class="droply-q-chip" data-quality="1080p">
+          <button class="saveo-q-chip" data-quality="1080p">
             <span class="q-label">Full HD 1080p</span>
           </button>
-          <button class="droply-q-chip" data-quality="720p">
+          <button class="saveo-q-chip" data-quality="720p">
             <span class="q-label">HD 720p</span>
           </button>
-          <button class="droply-q-chip" data-quality="480p">
+          <button class="saveo-q-chip" data-quality="480p">
             <span class="q-label">Standard 480p</span>
           </button>
-          <button class="droply-q-chip active" data-quality="best">
+          <button class="saveo-q-chip active" data-quality="best">
             <span class="q-label">Best Auto</span>
           </button>
-          <button class="droply-q-chip" data-quality="audio_mp3">
+          <button class="saveo-q-chip" data-quality="audio_mp3">
             <span class="q-label">Audio Only (MP3)</span>
           </button>
-          <button class="droply-q-chip" data-quality="audio_m4a">
+          <button class="saveo-q-chip" data-quality="audio_m4a">
             <span class="q-label">Audio Only (M4A)</span>
           </button>
         </div>
       </div>
 
-      <div class="droply-selection-bar">
-        <div class="droply-selection-count">
+      <div class="saveo-selection-bar">
+        <div class="saveo-selection-count">
           <span id="batch-selected-count">${selectedIndices.size}</span> of ${items.length} items selected
         </div>
-        <div class="droply-selection-btns">
+        <div class="saveo-selection-btns">
           <button class="text-action-btn" id="btn-batch-select-all">Select All</button>
           <span class="divider">|</span>
           <button class="text-action-btn" id="btn-batch-deselect-all">Deselect All</button>
         </div>
       </div>
 
-      <div class="droply-playlist-scrollable" id="batch-items-container">
+      <div class="saveo-playlist-scrollable" id="batch-items-container">
         ${items.map((it, idx) => `
           <div class="playlist-video-row selected" data-idx="${idx}">
             <input type="checkbox" class="playlist-chk custom-checkbox" data-idx="${idx}" checked />
@@ -823,7 +831,7 @@ const Components = {
         `).join('')}
       </div>
 
-      <div class="droply-playlist-footer">
+      <div class="saveo-playlist-footer">
         <button class="primary-btn btn-download-playlist-now" id="btn-download-batch-now">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           <span id="btn-download-batch-text">Download All (${selectedIndices.size} Items)</span>
@@ -840,9 +848,9 @@ const Components = {
       if (dlBtn) dlBtn.disabled = selectedIndices.size === 0;
     };
 
-    card.querySelectorAll('.droply-q-chip').forEach(chip => {
+    card.querySelectorAll('.saveo-q-chip').forEach(chip => {
       chip.addEventListener('click', () => {
-        card.querySelectorAll('.droply-q-chip').forEach(c => c.classList.remove('active'));
+        card.querySelectorAll('.saveo-q-chip').forEach(c => c.classList.remove('active'));
         chip.classList.add('active');
         selectedQuality = chip.getAttribute('data-quality');
         isAudio = selectedQuality.startsWith('audio_');

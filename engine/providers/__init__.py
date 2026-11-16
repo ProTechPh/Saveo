@@ -1,5 +1,5 @@
 """
-Droply Providers
+Saveo Providers
 """
 from .base import BaseProvider, MediaFormat, MediaMetadata, ProviderCapabilities
 from .registry import registry, ProviderRegistry

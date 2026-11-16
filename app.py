@@ -1,5 +1,5 @@
 """
-Droply - Universal Local Media Downloader
+Saveo - Universal Local Media Downloader
 Application Entry Point and Desktop Window Launcher
 """
 
@@ -7,7 +7,7 @@ import os
 import sys
 
 # Priority import path for self-updated yt-dlp core engine
-_engine_updates = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Droply", "engine_updates")
+_engine_updates = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Saveo", "engine_updates")
 if os.path.isdir(_engine_updates) and _engine_updates not in sys.path:
     sys.path.insert(0, _engine_updates)
 
@@ -69,9 +69,9 @@ class MirrorStream:
 _log_file = None
 if sys.platform == "win32":
     try:
-        log_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Droply")
+        log_dir = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "Saveo")
         os.makedirs(log_dir, exist_ok=True)
-        _log_file = open(os.path.join(log_dir, "droply.log"), "a", encoding="utf-8", errors="replace")
+        _log_file = open(os.path.join(log_dir, "saveo.log"), "a", encoding="utf-8", errors="replace")
     except Exception:
         _log_file = None
 
@@ -151,7 +151,7 @@ def run_server(host: str, port: int):
         server = uvicorn.Server(config)
         server.run()
     except Exception as e:
-        sys.stderr.write(f"DroplyServer exception: {e}\n")
+        sys.stderr.write(f"SaveoServer exception: {e}\n")
 
 
 try:
@@ -176,7 +176,7 @@ def close_splash():
 
 class NativeSplashManager:
     """
-    Native Windows splash window matching Droply droplet design with real,
+    Native Windows splash window matching Saveo design with real,
     dynamic progress tracking as the engine and interface boot up.
     """
     def __init__(self):
@@ -188,7 +188,7 @@ class NativeSplashManager:
         self.thread = None
         if sys.platform == "win32" and "--headless" not in sys.argv:
             try:
-                self.thread = threading.Thread(target=self._run, daemon=True, name="DroplyNativeSplash")
+                self.thread = threading.Thread(target=self._run, daemon=True, name="SaveoNativeSplash")
                 self.thread.start()
                 self._ready_event.wait(0.6)
             except Exception:
@@ -262,7 +262,7 @@ class NativeSplashManager:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Droply - Universal Local Media Downloader")
+    parser = argparse.ArgumentParser(description="Saveo - Universal Local Media Downloader")
     parser.add_argument("--host", default="127.0.0.1", help="Host interface (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8765, help="Port to run on (default: 8765)")
     parser.add_argument("--web", action="store_true", help="Launch in standard web browser instead of native window")
@@ -288,7 +288,7 @@ def main():
         target=run_server,
         args=(args.host, port),
         daemon=True,
-        name="DroplyServer"
+        name="SaveoServer"
     )
     server_thread.start()
     splash.update_progress(40, "Spinning up local API server...")
@@ -301,13 +301,13 @@ def main():
         except Exception:
             pass
 
-    threading.Thread(target=_prewarm_background_tasks, daemon=True, name="DroplyEnginePrewarm").start()
+    threading.Thread(target=_prewarm_background_tasks, daemon=True, name="SaveoEnginePrewarm").start()
 
     # Wait for server to come online
     server_ready = False
     for _ in range(100):
         if not server_thread.is_alive():
-            print("Fatal error: DroplyServer background thread terminated.")
+            print("Fatal error: SaveoServer background thread terminated.")
             break
         if is_port_in_use(port, args.host):
             server_ready = True
@@ -325,7 +325,7 @@ def main():
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("\nShutting down Droply.")
+            print("\nShutting down Saveo.")
             sys.exit(0)
 
     if args.web:
@@ -337,15 +337,13 @@ def main():
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("\nShutting down Droply.")
+            print("\nShutting down Saveo.")
             sys.exit(0)
 
     # Attempt native desktop window via pywebview
     try:
         import webview
         icon_path = get_resource_path("Saveo.ico")
-        if not os.path.exists(icon_path):
-            icon_path = get_resource_path("Droply.ico")
         if not os.path.exists(icon_path):
             icon_path = None
 
@@ -387,10 +385,10 @@ def main():
             time.sleep(1.5)
             reveal_window()
 
-        threading.Thread(target=_fallback_reveal, daemon=True, name="DroplyRevealFallback").start()
+        threading.Thread(target=_fallback_reveal, daemon=True, name="SaveoRevealFallback").start()
 
         def set_win32_window_icon():
-            """Ensures the Droply icon is set on the Win32 window handle and taskbar."""
+            """Ensures the Saveo icon is set on the Win32 window handle and taskbar."""
             if sys.platform == "win32" and icon_path and os.path.exists(icon_path):
                 time.sleep(0.6)
                 try:
@@ -412,7 +410,7 @@ def main():
                         LR_LOADFROMFILE | LR_DEFAULTSIZE
                     )
                     if h_icon:
-                        hwnd = user32.FindWindowW(None, "Saveo") or user32.FindWindowW(None, "Droply")
+                        hwnd = user32.FindWindowW(None, "Saveo")
                         if hwnd:
                             user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, h_icon)
                             user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, h_icon)
@@ -442,7 +440,7 @@ def main():
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("\nShutting down Droply.")
+            print("\nShutting down Saveo.")
             sys.exit(0)
 
 

@@ -1,4 +1,4 @@
-package com.droply.app;
+package com.saveo.app;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -40,14 +40,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class DownloadForegroundService extends Service {
 
-    private static final String TAG = "DroplyForegroundService";
-    public static final String CHANNEL_ID = "droply_downloads_channel";
+    private static final String TAG = "SaveoForegroundService";
+    public static final String CHANNEL_ID = "saveo_downloads_channel";
     public static final int NOTIFICATION_ID = 4040;
 
-    public static final String ACTION_START_DOWNLOAD = "com.droply.app.action.START_DOWNLOAD";
-    public static final String ACTION_PAUSE_DOWNLOAD = "com.droply.app.action.PAUSE_DOWNLOAD";
-    public static final String ACTION_RESUME_DOWNLOAD = "com.droply.app.action.RESUME_DOWNLOAD";
-    public static final String ACTION_CANCEL_DOWNLOAD = "com.droply.app.action.CANCEL_DOWNLOAD";
+    public static final String ACTION_START_DOWNLOAD = "com.saveo.app.action.START_DOWNLOAD";
+    public static final String ACTION_PAUSE_DOWNLOAD = "com.saveo.app.action.PAUSE_DOWNLOAD";
+    public static final String ACTION_RESUME_DOWNLOAD = "com.saveo.app.action.RESUME_DOWNLOAD";
+    public static final String ACTION_CANCEL_DOWNLOAD = "com.saveo.app.action.CANCEL_DOWNLOAD";
 
     public static final String EXTRA_URL = "extra_url";
     public static final String EXTRA_FORMAT_ID = "extra_format_id";
@@ -106,7 +106,7 @@ public class DownloadForegroundService extends Service {
             if (wakeLock == null) {
                 PowerManager powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
                 if (powerManager != null) {
-                    wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Droply:DownloadWakeLock");
+                    wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Saveo:DownloadWakeLock");
                     wakeLock.setReferenceCounted(false);
                     // Acquire for a safe maximum of 2 hours per download batch
                     wakeLock.acquire(2 * 60 * 60 * 1000L);
@@ -245,7 +245,7 @@ public class DownloadForegroundService extends Service {
                     Python.start(new AndroidPlatform(getApplicationContext()));
                 }
                 Python py = Python.getInstance();
-                PyObject module = py.getModule("droply_engine");
+                PyObject module = py.getModule("saveo_engine");
 
                 ServiceEngineCallback callback = new ServiceEngineCallback(title != null ? title : "Media");
                 module.callAttr("download_media",
@@ -381,7 +381,7 @@ public class DownloadForegroundService extends Service {
         executor.execute(() -> {
             try {
                 if (Python.isStarted()) {
-                    PyObject module = Python.getInstance().getModule("droply_engine");
+                    PyObject module = Python.getInstance().getModule("saveo_engine");
                     module.callAttr("pause_active_download");
                 }
             } catch (Exception ignored) {}
@@ -393,7 +393,7 @@ public class DownloadForegroundService extends Service {
         executor.execute(() -> {
             try {
                 if (Python.isStarted()) {
-                    PyObject module = Python.getInstance().getModule("droply_engine");
+                    PyObject module = Python.getInstance().getModule("saveo_engine");
                     module.callAttr("cancel_active_download");
                 }
             } catch (Exception ignored) {}
@@ -405,7 +405,7 @@ public class DownloadForegroundService extends Service {
         executor.execute(() -> {
             try {
                 if (Python.isStarted()) {
-                    PyObject module = Python.getInstance().getModule("droply_engine");
+                    PyObject module = Python.getInstance().getModule("saveo_engine");
                     module.callAttr("resume_active_download");
                 }
             } catch (Exception ignored) {}

@@ -1,5 +1,5 @@
 """
-Droply - File Manager
+Saveo - File Manager
 Handles filesystem sanitization, duplicate name resolution, opening explorer windows,
 and disk space checks safely.
 """
@@ -19,7 +19,7 @@ def sanitize_filename(name: str, max_length: int = 200) -> str:
     Removes reserved characters: < > : " / \\ | ? * and control chars.
     """
     if not name:
-        return "droply_media"
+        return "saveo_media"
 
     # Replace invalid Windows chars
     sanitized = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '', name)
@@ -173,7 +173,10 @@ def get_default_download_dir() -> str:
     """Return default user Downloads/Saveo folder."""
     home = Path.home()
     default_dir = home / "Downloads" / "Saveo"
-    default_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        default_dir.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
     return str(default_dir)
 
 

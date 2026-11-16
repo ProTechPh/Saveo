@@ -1,5 +1,5 @@
 """
-Droply - Universal yt-dlp Provider
+Saveo - Universal yt-dlp Provider
 Harnesses yt-dlp and local FFmpeg to extract metadata, detect qualities,
 merge video/audio streams, and convert audio formats across hundreds of platforms.
 """
@@ -73,7 +73,7 @@ def humanize_error(raw_err: str) -> Dict[str, str]:
     if "confirm you're not a bot" in err or "not a bot" in err or "bot verification" in err:
         return {
             "friendly": "YouTube anti-bot verification challenge triggered.",
-            "suggestion": "YouTube is challenging automated requests from this network. Add your browser cookies (cookies.txt) in Droply Settings or place it into ~/.droply/cookies.txt to bypass this check.",
+            "suggestion": "YouTube is challenging automated requests from this network. Add your browser cookies (cookies.txt) in Saveo Settings or place it into ~/.saveo/cookies.txt to bypass this check.",
             "technical": str(raw_err)
         }
     if "video is unavailable" in err or "this video is unavailable" in err or "unavailable" in err:
@@ -217,9 +217,9 @@ class YtDlpProvider(BaseProvider):
         """
         Locates any available cookies.txt file for yt-dlp authentication and bot bypass.
         Checks:
-        1. Custom path configured in Droply settings (cookie_file)
-        2. %LOCALAPPDATA%/Droply/cookies.txt
-        3. ~/.droply/cookies.txt
+        1. Custom path configured in Saveo settings (cookie_file)
+        2. %LOCALAPPDATA%/Saveo/cookies.txt
+        3. ~/.saveo/cookies.txt
         4. Application root ./cookies.txt
         """
         try:
@@ -232,13 +232,13 @@ class YtDlpProvider(BaseProvider):
 
         localappdata = os.environ.get('LOCALAPPDATA')
         if localappdata:
-            local_app_cookie = Path(localappdata) / "Droply" / "cookies.txt"
-            if local_app_cookie.exists() and local_app_cookie.stat().st_size > 0:
-                return str(local_app_cookie)
+            local_saveo_cookie = Path(localappdata) / "Saveo" / "cookies.txt"
+            if local_saveo_cookie.exists() and local_saveo_cookie.stat().st_size > 0:
+                return str(local_saveo_cookie)
 
-        home_cookie = Path.home() / ".droply" / "cookies.txt"
-        if home_cookie.exists() and home_cookie.stat().st_size > 0:
-            return str(home_cookie)
+        home_saveo_cookie = Path.home() / ".saveo" / "cookies.txt"
+        if home_saveo_cookie.exists() and home_saveo_cookie.stat().st_size > 0:
+            return str(home_saveo_cookie)
 
         app_cookie = Path.cwd() / "cookies.txt"
         if app_cookie.exists() and app_cookie.stat().st_size > 0:

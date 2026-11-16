@@ -9,7 +9,7 @@ dist/
 *.spec
 
 # Local user configs
-.droply/
+.saveo/
 
 # Environments
 .env

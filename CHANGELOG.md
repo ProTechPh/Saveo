@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Droply will be documented in this file.
+All notable changes to Saveo will be documented in this file.
 
 ## [1.4.4]
 
@@ -31,7 +31,7 @@ All notable changes to Droply will be documented in this file.
   - Configured native library packaging (`android:extractNativeLibs="true"` and `jniLibs/arm64-v8a` sourceSets).
   - Integrated executable permission enforcement and automated engine path resolution, allowing Android devices with an ARM64 FFmpeg package to merge 1080p, 1440p, and 4K video+audio YouTube streams.
 - **Native Windows Splash Screen with Real-Time Progress Bar:**
-  - Replaced redundant in-app HTML splash overlay with a native Windows splash screen featuring the Droply droplet emblem and a live, moving progress bar tracking actual engine initialization (*"Starting engine..."*, *"Spinning up local API server..."*, *"Connecting media services..."*).
+  - Replaced redundant in-app HTML splash overlay with a native Windows splash screen featuring the Saveo droplet emblem and a live, moving progress bar tracking actual engine initialization (*"Starting engine..."*, *"Spinning up local API server..."*, *"Connecting media services..."*).
   - Automatically closes as soon as WebView2 renders, transitioning the user straight into the download interface with zero artificial delays.
 - **Cat Icon Polish & Reversion:**
   - Restored the clean minimalist cat-face outline icon (`.cat-face-divider-svg`) across header and UI accents.
@@ -59,11 +59,11 @@ All notable changes to Droply will be documented in this file.
 
 ## [1.4.2]
 
-- **Android Download Engine Queue & Completion Fix:** Resolved an indentation defect in `droply_engine.py` where download completion logic and callbacks were trapped inside an exception handling block. Downloads on Android now properly emit completion events, unblocking consecutive downloads, playlists, and batch queue tasks.
+- **Android Download Engine Queue & Completion Fix:** Resolved an indentation defect in `saveo_engine.py` where download completion logic and callbacks were trapped inside an exception handling block. Downloads on Android now properly emit completion events, unblocking consecutive downloads, playlists, and batch queue tasks.
 - **Android Native Media Player & Direct Download Folder Navigation:**
   - Restricted `openFile()` MIME types specifically to audio and video (`video/*`, `audio/*`), opening the system chooser with "Play Media With" and preventing non-media apps (Maps, Calendar, LinkedIn, etc.) from intercepting playback.
-  - Re-routed `openDownloadFolder()` directly to the Droply downloads directory (`Download/Droply`) using `DocumentsContract` and `DownloadManager.ACTION_VIEW_DOWNLOADS`, avoiding generic file pickers.
-- **Android Bot Verification & Cookie Authentication:** Added automated discovery and parsing for Netscape `cookies.txt` on Android storage (`Download/Droply/cookies.txt` and `Download/cookies.txt`), passing it to the embedded engine to bypass YouTube bot-verification and age-restricted challenges.
+  - Re-routed `openDownloadFolder()` directly to the Saveo downloads directory (`Download/Saveo`) using `DocumentsContract` and `DownloadManager.ACTION_VIEW_DOWNLOADS`, avoiding generic file pickers.
+- **Android Bot Verification & Cookie Authentication:** Added automated discovery and parsing for Netscape `cookies.txt` on Android storage (`Download/Saveo/cookies.txt` and `Download/cookies.txt`), passing it to the embedded engine to bypass YouTube bot-verification and age-restricted challenges.
 - **Playlist Quality Presets & Mixed-Resolution Ceiling Behavior:**
   - Added `2160p (4K UHD)` and `1440p (2K QHD)` preset options to playlist and batch download quality selectors.
   - Calibrated playlist bitrate and size estimations (fixing the inverted Best Auto ~5.5 Mbps estimation so 4K > 2K > 1080p).
@@ -94,14 +94,14 @@ All notable changes to Droply will be documented in this file.
 - **Opus & M4A Format Disambiguation:** Rewrote audio stream parsing to independently extract native AAC/M4A streams vs Opus/WebM streams, displaying true format-specific bitrates and download footprints (~128 kbps vs ~160 kbps) rather than identical sizes.
 - **Transparent Audio Download UI:** The active download card and queue now display stream transfer metrics alongside expected encoded target sizes (e.g. `44.2 MB (Stream • Target ~105.6 MB)`) with a dedicated `Encoding MP3...` badge and status indicator during FFmpeg post-processing.
 - **Splash Screen Overhaul & Flash Elimination:** Eliminated the multi-stage visual glitch on launch. Fixed the bright white WebView2 canvas flash by initializing windows with dark mode background brushes, dismissed external Tkinter splashes, and implemented a smooth in-app CSS shimmer warmup card.
-- **Codebase Sanitization & Legacy Cleanup:** Purged redundant icon boilerplate files (`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`), removed dead non-Windows platform branches, eliminated unused `aiofiles` dependency, added ProGuard configuration for Android, and unified all internal identifiers and thread naming to Droply.
-- **Platform Scope Formalization:** Cleaned all legacy Apple/iOS webclip meta tags and non-Windows file helpers to strictly align Droply with Windows (Desktop) and Android (Mobile).
+- **Codebase Sanitization & Legacy Cleanup:** Purged redundant icon boilerplate files (`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`), removed dead non-Windows platform branches, eliminated unused `aiofiles` dependency, added ProGuard configuration for Android, and unified all internal identifiers and thread naming to Saveo.
+- **Platform Scope Formalization:** Cleaned all legacy Apple/iOS webclip meta tags and non-Windows file helpers to strictly align Saveo with Windows (Desktop) and Android (Mobile).
 
 ## [1.3.9]
 
 - **Integrated Authentication & Cookie Manager:** Added full dual-mode authentication support to seamlessly bypass YouTube anti-bot verification challenges ("Sign in to confirm you're not a bot") and access member-only or restricted media.
 - **Browser Profile Session Extraction:** Automatically probes and extracts session cookies directly from installed local browser profiles (Mozilla Firefox, Brave Browser, Vivaldi, Google Chrome, Microsoft Edge, Opera) to authenticate downloads without manual export.
-- **Persistent & Portable `cookies.txt` Import:** Added native file browsing, direct in-app upload, and automatic path detection for Netscape `cookies.txt` files (safely stored locally in `~/.droply/cookies.txt` or `%LOCALAPPDATA%\Droply\cookies.txt`).
+- **Persistent & Portable `cookies.txt` Import:** Added native file browsing, direct in-app upload, and automatic path detection for Netscape `cookies.txt` files (safely stored locally in `~/.saveo/cookies.txt` or `%LOCALAPPDATA%\Saveo\cookies.txt`).
 - **Granular Error Humanization & Typo Diagnostics:** Transformed raw yt-dlp error traces into clear, actionable advice. Anti-bot challenges, video typos / unavailable media (e.g. distinguishing digit '0' vs letter 'O' in video IDs), private videos, and DRM restrictions are now accurately distinguished with dedicated quick-action remediation buttons.
 - **Regional Bans & VPN Advisory:** Added intelligent detection for country-level ISP blocks and geo-restrictions (e.g. TikTok, Reddit, or regional ISP filters) with actionable VPN connection guidance (Cloudflare WARP, ProtonVPN, Windscribe) in the UI, Settings, and documentation.
 - **Media Card Authentication Status Badge:** The media preview card and engine diagnostics card now display live authentication status (e.g. `🍪 cookies.txt Active` or `🍪 FIREFOX Session Active`).
@@ -125,7 +125,7 @@ All notable changes to Droply will be documented in this file.
 
 ## [1.3.6]
 
-- **Multi-Quality Re-download Isolation:** Resolved the issue where downloading the same media at a higher/different resolution (e.g., 144p followed by 1080p FHD) completed in 1 second by reusing the previous lower-quality file. Droply now enforces unique target filenames and enables download execution so distinct qualities download to disk independently without collisions.
+- **Multi-Quality Re-download Isolation:** Resolved the issue where downloading the same media at a higher/different resolution (e.g., 144p followed by 1080p FHD) completed in 1 second by reusing the previous lower-quality file. Saveo now enforces unique target filenames and enables download execution so distinct qualities download to disk independently without collisions.
 - **Auto-Dismissal of Failed Download Error Cards:** The "Download unavailable" error card is now automatically dismissed whenever a retry is triggered, when a task transitions to downloading, or when a download finishes.
 - **Resilient Open File & Multi-Level Path Resolution:** Escaped and sanitized all HTML attributes for media titles containing quotes or special characters. Added task ID and download folder fallback resolution to ensure "Open" and "Play" buttons in Recent Downloads and History reliably launch the file.
 - **Reliable Library & History Rendering:** Added fault-tolerant item rendering in the History & Library tab, safeguarding against non-string format labels and unescaped thumbnail error handlers so every finished download renders cleanly in the list.
@@ -144,7 +144,7 @@ All notable changes to Droply will be documented in this file.
 
 ## [1.3.4]
 
-- **Full Resolution Stream Extraction (Up to 4K / 2160p):** Removed restrictive client overrides that limited media streams to 360p. Droply now detects and offers all available resolutions (4K 2160p, 1440p, 1080p FHD, 720p HD, 480p, 360p, 240p) with seamless fallback so audio merging never caps video resolution.
+- **Full Resolution Stream Extraction (Up to 4K / 2160p):** Removed restrictive client overrides that limited media streams to 360p. Saveo now detects and offers all available resolutions (4K 2160p, 1440p, 1080p FHD, 720p HD, 480p, 360p, 240p) with seamless fallback so audio merging never caps video resolution.
 - **True Audio-Only Downloads & Accurate Size Estimations:** Audio downloads now fetch genuine audio-only streams directly (saving over 100+ MB of network bandwidth per download) rather than downloading entire video streams. Format chips and download cards display accurate estimated sizes and bitrates.
 - **Permanent Idle Sleeping Cat & Welcome Cue:** Preserved the sleeping cat artwork and "Ready for media" welcome prompt in static HTML and queue management so it never disappears during sessions, on launch, or after clearing downloads.
 - **Refined Windows Desktop Controls:** Removed the mobile-specific "Download to Phone" label in favor of clean desktop action controls ("Download") tailored for Windows.

@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'com.droply.app'
+    namespace 'com.saveo.app'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.droply.app"
+        applicationId "com.saveo.app"
         minSdk 24
         targetSdk 34
         versionCode 15
@@ -56,9 +56,9 @@ android {
             def ks = file("release.keystore")
             if (ks.exists()) {
                 storeFile ks
-                storePassword "droplyapp"
-                keyAlias "droply"
-                keyPassword "droplyapp"
+                storePassword "saveoapp"
+                keyAlias "saveo"
+                keyPassword "saveoapp"
                 v1SigningEnabled true
                 v2SigningEnabled true
             } else {

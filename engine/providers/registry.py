@@ -1,5 +1,5 @@
 """
-Droply - Provider Registry
+Saveo - Provider Registry
 Manages registered providers and handles instant platform detection.
 """
 

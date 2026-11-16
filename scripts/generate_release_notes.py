@@ -25,16 +25,16 @@ def main():
     if not notes:
         notes = "- **Maintenance & Polish:** Engine and UI stability enhancements."
 
-    # Verify if Droply-Android.apk was compiled and is present in release assets
+    # Verify if Saveo-Android.apk was compiled and is present in release assets
     has_apk = (
-        os.path.exists("Droply-Android.apk")
-        or os.path.exists(os.path.join("release-assets", "Droply-Android.apk"))
+        os.path.exists("Saveo-Android.apk")
+        or os.path.exists(os.path.join("release-assets", "Saveo-Android.apk"))
     )
 
     if has_apk:
-        android_link = f"[Download Droply-Android.apk](https://github.com/Amlan-Sarkar/Droply/releases/download/{tag}/Droply-Android.apk)"
+        android_link = f"[Download Saveo-Android.apk](https://github.com/ProTechPh/Saveo/releases/download/{tag}/Saveo-Android.apk)"
     else:
-        android_link = "⚠️ *Not generated in this build.* [Download validated APK (v1.3.5)](https://github.com/Amlan-Sarkar/Droply/releases/download/v1.3.5/Droply-Android.apk) · [All Releases](https://github.com/Amlan-Sarkar/Droply/releases)"
+        android_link = "⚠️ *Not generated in this build.* [Download validated APK (v1.3.5)](https://github.com/ProTechPh/Saveo/releases/download/v1.3.5/Saveo-Android.apk) · [All Releases](https://github.com/ProTechPh/Saveo/releases)"
 
     body = f"""### 🚀 What's New in this Release:
 {notes}
@@ -45,10 +45,10 @@ def main():
 
 | Platform | Package | Direct Link |
 | :--- | :--- | :--- |
-| 🪟 **Windows 10 / 11** | **Setup Wizard (Recommended)** | [Download Droply-Setup.exe](https://github.com/Amlan-Sarkar/Droply/releases/download/{tag}/Droply-Setup.exe) |
-| 🪟 **Windows 10 / 11** | Standalone Portable ZIP | [Download Droply-Windows-x64.zip](https://github.com/Amlan-Sarkar/Droply/releases/download/{tag}/Droply-Windows-x64.zip) |
+| 🪟 **Windows 10 / 11** | **Setup Wizard (Recommended)** | [Download Saveo-Setup.exe](https://github.com/ProTechPh/Saveo/releases/download/{tag}/Saveo-Setup.exe) |
+| 🪟 **Windows 10 / 11** | Standalone Portable ZIP | [Download Saveo-Windows-x64.zip](https://github.com/ProTechPh/Saveo/releases/download/{tag}/Saveo-Windows-x64.zip) |
 
-*Tested on Windows 11. Run `Droply-Setup.exe` for an effortless modern setup with Start Menu and Desktop shortcuts (no administrator rights needed). Or extract the portable zip and run `Droply.exe`.*
+*Tested on Windows 11. Run `Saveo-Setup.exe` for an effortless modern setup with Start Menu and Desktop shortcuts (no administrator rights needed). Or extract the portable zip and run `Saveo.exe`.*
 
 ---
 
