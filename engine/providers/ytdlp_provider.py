@@ -9,6 +9,8 @@ import re
 import sys
 import time
 import shutil
+import struct
+import urllib.request
 from pathlib import Path
 from typing import List, Dict, Any, Callable, Optional
 from urllib.parse import urlparse
@@ -124,6 +126,78 @@ def humanize_error(raw_err: str) -> Dict[str, str]:
         "suggestion": "Make sure the URL is accessible and the media is public.",
         "technical": str(raw_err)
     }
+
+
+def _mp4_duration_seconds(atom_bytes: bytes) -> int:
+    """Reads the duration out of an MP4 'mvhd' atom found in the given bytes."""
+    idx = atom_bytes.find(b'mvhd')
+    if idx < 0:
+        return 0
+    version = atom_bytes[idx + 4] if idx + 5 <= len(atom_bytes) else 0
+    try:
+        if version == 1:
+            timescale, duration = struct.unpack('>IQ', atom_bytes[idx + 24:idx + 36])
+        else:
+            timescale, duration = struct.unpack('>II', atom_bytes[idx + 16:idx + 24])
+    except struct.error:
+        return 0
+    if not timescale:
+        return 0
+    if not duration:
+        # Fragmented MP4 (Instagram DASH): total length lives in mvex/mehd instead
+        idx = atom_bytes.find(b'mehd')
+        if idx < 0:
+            return 0
+        try:
+            if atom_bytes[idx + 4] == 1:
+                duration = struct.unpack('>Q', atom_bytes[idx + 8:idx + 16])[0]
+            else:
+                duration = struct.unpack('>I', atom_bytes[idx + 8:idx + 12])[0]
+        except struct.error:
+            return 0
+    return int(round(duration / timescale)) if duration else 0
+
+
+def _probe_url_duration(url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 15) -> int:
+    """
+    Reads the duration from a media file's container headers over HTTP range requests.
+    Some extractors (Instagram reels) report no duration at all, but the MP4 moov atom has it.
+    shortcut: only MP4/M4A mvhd atoms, extend if other containers need probing.
+    """
+    req_headers = {k: v for k, v in (headers or {}).items() if k.lower() != 'range'}
+    chunk = 262144
+    try:
+        req = urllib.request.Request(url, headers={**req_headers, 'Range': f'bytes=0-{chunk - 1}'})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            head = resp.read(chunk)
+            total = int((resp.headers.get('Content-Range') or '/0').rsplit('/', 1)[-1] or 0)
+        seconds = _mp4_duration_seconds(head)
+        if seconds or total <= len(head):
+            return seconds
+        # moov atom at the end of the file: pull the tail instead
+        req = urllib.request.Request(url, headers={**req_headers, 'Range': f'bytes={max(total - chunk, 0)}-'})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return _mp4_duration_seconds(resp.read(chunk))
+    except Exception:
+        return 0
+
+
+def _has_video_stream(info: Dict[str, Any]) -> bool:
+    if info.get('vcodec') not in (None, '', 'none'):
+        return True
+    return any(f.get('vcodec') not in (None, '', 'none') for f in info.get('formats') or [])
+
+
+def probe_info_duration(info: Dict[str, Any]) -> int:
+    """Recovers a missing duration from the extracted media itself (selected stream, then formats)."""
+    headers = info.get('http_headers')
+    urls = [info.get('url')] + [f.get('url') for f in info.get('formats') or []]
+    for url in urls:
+        if url:
+            seconds = _probe_url_duration(url, headers)
+            if seconds:
+                return seconds
+    return 0
 
 
 class YtDlpProvider(BaseProvider):
@@ -411,6 +485,8 @@ class YtDlpProvider(BaseProvider):
         uploader = info.get('uploader') or info.get('channel') or info.get('creator') or "Unknown Creator"
         uploader_url = info.get('uploader_url') or ""
         duration = int(info.get('duration') or 0)
+        if duration <= 0 and _has_video_stream(info):
+            duration = probe_info_duration(info)
         duration_str = format_seconds(duration)
         thumbnail = info.get('thumbnail') or ""
         if thumbnail.startswith("//"):

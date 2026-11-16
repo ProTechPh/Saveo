@@ -15,7 +15,7 @@ root_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_dir))
 
 from engine.providers.registry import registry
-from engine.providers.ytdlp_provider import humanize_error, YtDlpProvider
+from engine.providers.ytdlp_provider import humanize_error, YtDlpProvider, _mp4_duration_seconds
 from engine.file_manager import sanitize_filename, get_unique_filename, format_bytes, format_seconds
 from engine.settings_manager import SettingsManager
 from engine.history_manager import HistoryManager
@@ -189,6 +189,24 @@ class TestSaveoCore(unittest.TestCase):
         # Remove task
         qm.remove_task(task.id)
         self.assertIsNone(qm.get_task(task.id))
+
+    def test_mp4_mvhd_duration_parsing(self):
+        """Instagram reels omit duration, so it is read from the MP4 mvhd atom."""
+        # version 0 mvhd: timescale 600, duration 3012 frames -> 5s
+        v0 = b'\x00\x00\x00\x6c' + b'mvhd' + b'\x00\x00\x00\x00' + b'\x00' * 8 + \
+            (600).to_bytes(4, 'big') + (3012).to_bytes(4, 'big') + b'\x00' * 80
+        self.assertEqual(_mp4_duration_seconds(v0), 5)
+        # version 1 mvhd: 64-bit times and duration
+        v1 = b'\x00\x00\x00\x78' + b'mvhd' + b'\x01\x00\x00\x00' + b'\x00' * 16 + \
+            (90000).to_bytes(4, 'big') + (2700000).to_bytes(8, 'big') + b'\x00' * 60
+        self.assertEqual(_mp4_duration_seconds(v1), 30)
+        # Nothing to read
+        self.assertEqual(_mp4_duration_seconds(b'not a video'), 0)
+        # Fragmented MP4: mvhd duration 0, real length in mvex/mehd (timescale 1000)
+        fmp4 = b'\x00\x00\x00\x6c' + b'mvhd' + b'\x00\x00\x00\x00' + b'\x00' * 8 + \
+            (1000).to_bytes(4, 'big') + (0).to_bytes(4, 'big') + b'\x00' * 80 + \
+            b'mvex' + b'\x00\x00\x00\x10' + b'mehd' + b'\x00\x00\x00\x00' + (4967).to_bytes(4, 'big')
+        self.assertEqual(_mp4_duration_seconds(fmp4), 5)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,8 @@ All notable changes to Saveo will be documented in this file.
 
 ## [1.4.4]
 
+- **Instagram Reel Duration Detection:**
+  - Reels no longer show `--:--`. When the extractor reports no duration (logged-out Instagram), Saveo now reads it from the media's MP4 `mvhd`/`mehd` headers over a 256 KB range request, so duration and size estimates appear instantly on desktop and Android.
 - **Android Resting Cat & Empty State Proportions:**
   - Applied strict scale constraints to the idle resting cat illustration on Android mobile viewports (`76px × 42px`), preventing fullscreen expansion on high-DPI displays.
   - Centered welcome media instructions with clean, balanced line-height and typography.
