@@ -267,7 +267,7 @@ def analyze_url(url: str) -> str:
         'retries': 2,
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'android', 'web'],
+                'player_client': ['default'],
             }
         },
         'http_headers': {
@@ -293,7 +293,7 @@ def analyze_url(url: str) -> str:
                 try:
                     retry_opts = dict(ydl_opts)
                     if 'extractor_args' in retry_opts and 'youtube' in retry_opts['extractor_args']:
-                        retry_opts['extractor_args'] = {'youtube': {'player_client': ['ios', 'android', 'web']}}
+                        retry_opts['extractor_args'] = {'youtube': {'player_client': ['default']}}
                     with yt_dlp.YoutubeDL(retry_opts) as fb_ydl:
                         info = fb_ydl.extract_info(url, download=False)
                 except Exception:
@@ -763,7 +763,9 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         'concurrent_fragment_downloads': 4,  # Download up to 4 DASH fragments in parallel for fast mobile throughput
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'android'], # Omit 'web' on download so stream starts immediately without JS timeouts
+                # Let yt-dlp pick its no-JS clients (visionos) instead of forcing ios/android,
+                # which only serve the 360p progressive stream and capped every quality at 360p.
+                'player_client': ['default'],
             }
         },
         'http_headers': {
