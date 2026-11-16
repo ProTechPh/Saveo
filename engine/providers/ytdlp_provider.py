@@ -802,7 +802,7 @@ class YtDlpProvider(BaseProvider):
                     "percent": 99.0,
                     "downloaded_bytes": d.get('total_bytes', 0),
                     "total_bytes": d.get('total_bytes', 0),
-                    "speed_str": f"Encoding {target_codec.upper()}..." if is_audio else "Merging / Finalizing",
+                    "speed_str": f"Encoding {target_codec.upper()}..." if is_audio else "Finishing up...",
                     "eta_str": "A few seconds"
                 })
 

@@ -1953,6 +1953,8 @@ class SaveoApp {
     if (fill) fill.style.width = `${Math.min(100, Math.max(0, pct))}%`;
 
     const isProcessing = (task.status === 'processing');
+    const etaLabel = document.getElementById('single-metric-eta-label');
+    if (etaLabel) etaLabel.textContent = isProcessing ? 'Duration' : 'Estimated Time';
     const isPaused = (task.status === 'paused');
     const isAudio = Boolean(task.is_audio);
     const audioFmt = (task.audio_format || 'audio').toUpperCase();
@@ -1964,7 +1966,7 @@ class SaveoApp {
       } else if (isPaused) {
         badge.textContent = 'Paused';
       } else if (isProcessing) {
-        badge.textContent = isAudio ? `Encoding ${audioFmt}` : 'Finalizing';
+        badge.textContent = isAudio ? `Encoding ${audioFmt}` : 'Finishing up...';
       } else {
         badge.textContent = 'Downloading';
       }
@@ -1981,9 +1983,9 @@ class SaveoApp {
     } else if (isProcessing) {
       if (metricSize) metricSize.textContent = isAudio
         ? `Encoding ${audioFmt}${targetSizeClean ? ` (~${targetSizeClean})` : ''}`
-        : 'Merging video + audio...';
-      if (metricSpeed) metricSpeed.textContent = task.speed_str || 'Post-processing';
-      if (metricEta) metricEta.textContent = task.eta_str || 'A few seconds';
+        : `${task.downloaded_str || '0 B'} / ${task.total_str || '0 B'}`;
+      if (metricSpeed) metricSpeed.textContent = task.speed_str || 'Finishing up...';
+      if (metricEta) metricEta.textContent = task.eta_str || '--:--';
     } else {
       if (metricSize) {
         if (isAudio && targetSizeClean && ['MP3', 'WAV'].includes(audioFmt)) {
