@@ -1,0 +1,185 @@
+name: Build and Publish Releases (Windows & Android)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v1.3.6)'
+        required: false
+        default: 'v1.4.3'
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------- 1. WINDOWS STANDALONE BUILD (STABLE) ----------------
+  build-windows:
+    name: Build Windows (x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pillow
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress
+
+      - name: Configure Version Metadata
+        shell: pwsh
+        run: |
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag_name }}" } else { "${{ github.ref_name }}" }
+          if (-not $tag -or $tag -eq "") { $tag = "v1.4.3" }
+          $tagClean = $tag.TrimStart('v')
+          Write-Host "Configuring Droply version: $tag (Clean: $tagClean)"
+          Set-Content -Path VERSION -Value $tagClean
+          "DROPLY_VERSION=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RELEASE_VERSION_CLEAN=$tagClean" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build Standalone (Windows)
+        run: |
+          pyinstaller --noconfirm --name Droply --onedir --windowed --noconsole --icon Droply.ico --splash "assets/splash.png" --add-data "web;web" --add-data "assets;assets" --add-data "Droply.ico;." --add-data "VERSION;." --collect-all imageio_ffmpeg --collect-all pywebview --collect-all pythonnet --hidden-import tkinter --hidden-import tkinter.filedialog --hidden-import uvicorn.logging --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on app.py
+          New-Item -ItemType Directory -Force -Path dist/Droply/bin
+          if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+            Copy-Item (Get-Command ffmpeg).Source -Destination dist/Droply/bin/ffmpeg.exe
+          } else {
+            python -c "import shutil, imageio_ffmpeg; shutil.copy(imageio_ffmpeg.get_ffmpeg_exe(), 'dist/Droply/bin/ffmpeg.exe')"
+          }
+          Copy-Item Droply.ico -Destination dist/Droply/Droply.ico -Force
+          Copy-Item VERSION -Destination dist/Droply/VERSION -Force
+          Compress-Archive -Path dist/Droply -DestinationPath Droply-Windows-x64.zip -Force
+
+      - name: Build Inno Setup Windows Installer
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            $iscc = (Get-Command iscc.exe).Source
+          }
+          Write-Host "Compiling Inno Setup using: $iscc with version: $env:RELEASE_VERSION_CLEAN"
+          & $iscc "/DMyAppVersion=$env:RELEASE_VERSION_CLEAN" installer.iss
+          if (-not (Test-Path "dist/Droply-Setup.exe")) {
+            Write-Error "dist/Droply-Setup.exe was not created!"
+            exit 1
+          }
+          Move-Item dist/Droply-Setup.exe Droply-Setup.exe -Force
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Droply-Windows-Packages
+          path: |
+            Droply-Setup.exe
+            Droply-Windows-x64.zip
+
+  # ---------------- 2. ANDROID STANDALONE APK BUILD (EXPERIMENTAL) ----------------
+  build-android:
+    name: Build Android (APK)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Python 3.11 for Chaquopy
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.5'
+
+      - name: Grant Execute Permissions to Gradle
+        run: chmod +x android/gradlew
+
+      - name: Build Android APK with Gradle
+        env:
+          PYTHON_BINARY_PATH: ${{ steps.setup-python.outputs.python-path }}
+        run: |
+          cd android
+          PY_BIN="${{ steps.setup-python.outputs.python-path }}"
+          echo "Using Python binary for Chaquopy: $PY_BIN"
+          ./gradlew assembleRelease -PpythonBinary="$PY_BIN" --no-daemon --stacktrace
+          cd ..
+          APK_FILE=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "Error: No APK found after build!"
+            exit 1
+          fi
+          cp "$APK_FILE" Droply-Android.apk
+          ls -lh Droply-Android.apk
+
+      - name: Upload Android APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Droply-Android.apk
+          path: Droply-Android.apk
+
+  # ---------------- 3. PUBLISH TO GITHUB RELEASE ----------------
+  publish-release:
+    name: Publish Release Assets
+    needs: [build-windows, build-android]
+    runs-on: ubuntu-latest
+    if: (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && !cancelled() && needs.build-windows.result == 'success'
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download all compiled artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List Release Assets
+        run: ls -la release-assets
+
+      - name: Determine Release Tag
+        id: release_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag_name }}"
+            if [ -z "$TAG" ]; then TAG="v1.4.3"; fi
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Generate Release Notes
+        run: python3 scripts/generate_release_notes.py "${{ steps.release_tag.outputs.tag }}"
+
+      - name: Upload Assets to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          files: release-assets/*
+          name: Droply ${{ steps.release_tag.outputs.tag }} - Windows & Android Release
+          body_path: release_body.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
