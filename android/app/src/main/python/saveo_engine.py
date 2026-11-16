@@ -115,7 +115,7 @@ def format_bytes(b: Optional[Union[int, float]]) -> str:
 
 def format_seconds(s: Optional[Union[int, float]]) -> str:
     if not s or s <= 0:
-        return "Clip"
+        return "--:--"
     m, sec = divmod(int(round(s)), 60)
     h, m = divmod(m, 60)
     return f"{h:02d}:{m:02d}:{sec:02d}" if h > 0 else f"{m:02d}:{sec:02d}"
@@ -688,6 +688,20 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         output_dir = os.path.join(output_dir, clean_p)
 
     os.makedirs(output_dir, exist_ok=True)
+
+    # yt-dlp skips a download when the target file already exists, so give each download its own
+    # filename (like desktop); otherwise re-downloading a title instantly "completes" with the old file.
+    base_title = sanitize_filename(title.strip()) if title and title.strip() else ""
+    stem_tmpl = "%(title).150s"
+    if base_title:
+        stem = base_title
+        n = 1
+        while any(os.path.exists(os.path.join(output_dir, f"{stem}{ext}")) for ext in
+                  ('.mp4', '.mkv', '.webm', '.m4a', '.mp3', '.wav', '.opus')):
+            stem = f"{base_title} ({n})"
+            n += 1
+        stem_tmpl = stem
+    video_tmpl = os.path.join(output_dir, f"{stem_tmpl}.%(ext)s")
     downloaded_filepath = None
     last_progress_time = 0.0
 
@@ -742,8 +756,8 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
                         "total_bytes": d.get('total_bytes') or 0,
                         "downloaded_str": format_bytes(d.get('downloaded_bytes') or 0),
                         "total_str": format_bytes(d.get('total_bytes') or 0),
-                        "speed_str": "Merging / Finalizing",
-                        "eta_str": "A few seconds"
+                        "speed_str": "Finishing up...",
+                        "eta_str": format_seconds(int(info.get('duration') or 0)) if info.get('duration') else "A few seconds"
                     }))
                 except Exception:
                     pass
@@ -823,7 +837,7 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         audio_codec = audio_format or ('mp3' if 'mp3' in f_norm else 'm4a')
         if ffmpeg_available:
             ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/bestaudio*'
-            ydl_opts['outtmpl'] = os.path.join(output_dir, f'%(title)s.{audio_codec}')
+            ydl_opts['outtmpl'] = os.path.join(output_dir, f"{stem_tmpl}.{audio_codec}")
             ydl_opts['postprocessors'] = [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': audio_codec,
@@ -832,9 +846,9 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         else:
             # Standalone Android without ffmpeg: extract direct M4A stream cleanly
             ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
-            ydl_opts['outtmpl'] = os.path.join(output_dir, '%(title)s.%(ext)s')
+            ydl_opts['outtmpl'] = video_tmpl
     else:
-        ydl_opts['outtmpl'] = os.path.join(output_dir, '%(title)s.%(ext)s')
+        ydl_opts['outtmpl'] = video_tmpl
         if not f_norm or f_norm in ('best', 'auto', 'default'):
             if ffmpeg_available:
                 ydl_opts['format'] = 'bestvideo+bestaudio/best'

@@ -215,7 +215,7 @@ const Components = {
 
     let statusClass = task.status || 'queued';
     let statusLabel = task.status || 'Queued';
-    if (task.status === 'processing') statusLabel = task.is_audio ? 'Encoding' : 'Merging';
+    if (task.status === 'processing') statusLabel = task.is_audio ? 'Encoding' : 'Finishing up...';
     if (task.status === 'downloading') statusLabel = 'Downloading';
     if (task.status === 'cancelled') statusLabel = 'Cancelled';
     if (task.status === 'failed') statusLabel = 'Failed';
@@ -340,11 +340,11 @@ const Components = {
     if (task.status === 'processing') {
       const isAudio = Boolean(task.is_audio);
       const audioFmt = (task.audio_format || 'audio').toUpperCase();
-      const encLabel = isAudio ? `Encoding ${audioFmt}` : 'Merging Streams';
+      const encLabel = isAudio ? `Encoding ${audioFmt}` : 'Finishing up...';
       const targetStr = task.expected_size_str ? ` (~${task.expected_size_str.split('•')[0].trim()})` : '';
       return `
         <span class="meta-info">${encLabel}${targetStr}</span>
-        <span>${task.speed_str || 'Finalizing...'}</span>
+        <span>${task.eta_str || '--:--'}</span>
         <span class="meta-format">${task.format_label || ''}</span>
       `;
     }
@@ -382,7 +382,7 @@ const Components = {
     if (statusTag) {
       statusTag.className = `status-tag ${task.status}`;
       let label = task.status;
-      if (task.status === 'processing') label = 'Merging';
+      if (task.status === 'processing') label = 'Finishing up...';
       if (task.status === 'downloading') label = 'Downloading';
       if (task.status === 'cancelled') label = 'Cancelled';
       if (task.status === 'failed') label = 'Failed';
