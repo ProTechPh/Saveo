@@ -775,11 +775,28 @@ class SaveoApp {
     const techEl = document.getElementById('error-tech-log');
     const actionRow = document.getElementById('error-action-row');
 
-    const friendly = (err.data && err.data.error_friendly) ? err.data.error_friendly : err.message;
-    const suggestion = (err.data && err.data.error_suggestion) 
+    let friendly = (err.data && err.data.error_friendly) ? err.data.error_friendly : (err.message || 'Unable to extract media.');
+    let suggestion = (err.data && err.data.error_suggestion) 
       ? err.data.error_suggestion 
       : 'Make sure the URL is accessible and the media is public.';
-    const technical = (err.data && err.data.error_technical) ? err.data.error_technical : (err.stack || err.message);
+    let technical = (err.data && err.data.error_technical) ? err.data.error_technical : (err.stack || err.message);
+
+    // If friendly is raw JSON string (e.g. from native bridge), parse it cleanly
+    if (typeof friendly === 'string' && friendly.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(friendly);
+        if (parsed.error_friendly) friendly = parsed.error_friendly;
+        else if (parsed.error) friendly = parsed.error;
+        else if (parsed.message) friendly = parsed.message;
+        if (parsed.error_suggestion) suggestion = parsed.error_suggestion;
+        if (parsed.error_technical) technical = parsed.error_technical;
+      } catch (e) {}
+    }
+
+    // Strip raw CLI/module prefixes if present
+    if (typeof friendly === 'string') {
+      friendly = friendly.replace(/^ERROR:\s*(\[[^\]]+\]\s*[^:]+:\s*)?/i, '').trim();
+    }
 
     friendlyEl.textContent = friendly;
     if (suggestionEl) suggestionEl.textContent = suggestion;

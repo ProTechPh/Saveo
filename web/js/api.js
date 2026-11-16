@@ -414,7 +414,9 @@ class SaveoAPI {
         const handler = (e) => {
           window.removeEventListener('saveo_analyzed', handler);
           if (e.detail && e.detail.error) {
-            reject(new Error(e.detail.error));
+            const err = new Error(e.detail.error_friendly || e.detail.error);
+            err.data = e.detail;
+            reject(err);
           } else {
             resolve(e.detail);
           }
@@ -430,7 +432,9 @@ class SaveoAPI {
         const handler = (e) => {
           window.removeEventListener('saveo_analyzed', handler);
           if (e.detail && e.detail.error) {
-            reject(new Error(e.detail.error));
+            const err = new Error(e.detail.error_friendly || e.detail.error);
+            err.data = e.detail;
+            reject(err);
           } else {
             resolve(e.detail);
           }

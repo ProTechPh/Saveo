@@ -212,10 +212,45 @@ def estimate_format_bytes(fmt: Dict[str, Any], duration: Optional[Union[int, flo
     return None
 
 
+def humanize_error(raw_err: str) -> Dict[str, str]:
+    err = str(raw_err).lower()
+    if "requested format is not available" in err:
+        return {
+            "friendly": "The requested video format is not available as a single stream.",
+            "suggestion": "Try selecting a different resolution (e.g. 720p or 480p) or an audio-only format.",
+            "technical": str(raw_err)
+        }
+    if "confirm you're not a bot" in err or "not a bot" in err or "bot verification" in err:
+        return {
+            "friendly": "YouTube anti-bot verification challenge triggered.",
+            "suggestion": "Place a cookies.txt file into Download/Saveo/cookies.txt to bypass this check.",
+            "technical": str(raw_err)
+        }
+    if "video is unavailable" in err or "unavailable" in err:
+        return {
+            "friendly": "This media is unavailable or has been restricted.",
+            "suggestion": "Please check the URL or verify that the video is public.",
+            "technical": str(raw_err)
+        }
+    if "private video" in err or "sign in" in err or "login" in err:
+        return {
+            "friendly": "This media is private or requires account login.",
+            "suggestion": "Make sure the media is public or provide cookies.txt.",
+            "technical": str(raw_err)
+        }
+    clean = re.sub(r'^ERROR:\s*(\[[^\]]+\]\s*[^:]+:\s*)?', '', str(raw_err), flags=re.IGNORECASE).strip()
+    return {
+        "friendly": clean or str(raw_err),
+        "suggestion": "Make sure the URL is accessible and the media is public.",
+        "technical": str(raw_err)
+    }
+
+
 def analyze_url(url: str) -> str:
     """
     Extracts metadata, thumbnails, duration, and formats for a given URL.
     Returns JSON string for the Java bridge, supporting both single media and playlists.
+    Optimized for high-speed mobile extraction without JS engine lag.
     """
     is_playlist = is_playlist_url(url)
     ydl_opts = {
@@ -224,8 +259,18 @@ def analyze_url(url: str) -> str:
         'extract_flat': 'in_playlist' if is_playlist else False,
         'skip_download': True,
         'nocheckcertificate': True,
+        'format': 'all',  # Extract all formats; prevent format selection errors during analysis
+        'check_formats': False,  # Skip probing chunks over network for instant analysis
+        'socket_timeout': 10,
+        'retries': 2,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'web'],
+                'player_skip': ['configs', 'webpage'],
+            }
+        },
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
         }
     }
     if is_playlist:
@@ -242,22 +287,38 @@ def analyze_url(url: str) -> str:
             try:
                 info = ydl.extract_info(url, download=False)
             except Exception as e:
-                # Fallback 1: playlist extraction if single video failed on a playlist URL
-                if not is_playlist and ("list=" in url or "playlist" in url):
-                    ydl_opts['extract_flat'] = 'in_playlist'
-                    ydl_opts.pop('noplaylist', None)
-                    with yt_dlp.YoutubeDL(ydl_opts) as p_ydl:
-                        info = p_ydl.extract_info(url, download=False)
-                # Fallback 2: Twitter / X syndication fallback
-                elif "twitter.com" in url or "x.com" in url:
-                    info = extract_twitter_syndication(url)
-                    if not info:
+                # Fallback 1: retry without player_skip if Innertube fastpath failed
+                info = None
+                try:
+                    retry_opts = dict(ydl_opts)
+                    if 'extractor_args' in retry_opts and 'youtube' in retry_opts['extractor_args']:
+                        retry_opts['extractor_args'] = {'youtube': {'player_client': ['android', 'web']}}
+                    with yt_dlp.YoutubeDL(retry_opts) as fb_ydl:
+                        info = fb_ydl.extract_info(url, download=False)
+                except Exception:
+                    pass
+
+                if not info:
+                    # Fallback 2: playlist extraction if single video failed on a playlist URL
+                    if not is_playlist and ("list=" in url or "playlist" in url):
+                        ydl_opts['extract_flat'] = 'in_playlist'
+                        ydl_opts.pop('noplaylist', None)
+                        with yt_dlp.YoutubeDL(ydl_opts) as p_ydl:
+                            info = p_ydl.extract_info(url, download=False)
+                    # Fallback 3: Twitter / X syndication fallback
+                    elif "twitter.com" in url or "x.com" in url:
+                        info = extract_twitter_syndication(url)
+                        if not info:
+                            raise e
+                    else:
                         raise e
-                else:
-                    raise e
 
             if not info:
-                return json.dumps({"error": "No media information could be extracted."})
+                return json.dumps({
+                    "error": "No media information could be extracted.",
+                    "error_friendly": "No media information could be extracted from this URL.",
+                    "error_suggestion": "Verify that the link is valid and publicly accessible."
+                })
 
             # Check if extracted resource is a Playlist
             if info.get('_type') == 'playlist' or 'entries' in info:
@@ -556,7 +617,13 @@ def analyze_url(url: str) -> str:
             }
             return json.dumps(result)
     except Exception as e:
-        return json.dumps({"error": str(e)})
+        err_info = humanize_error(str(e))
+        return json.dumps({
+            "error": err_info["friendly"],
+            "error_friendly": err_info["friendly"],
+            "error_suggestion": err_info["suggestion"],
+            "error_technical": err_info["technical"]
+        })
 
 
 
@@ -635,8 +702,15 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         'nocheckcertificate': True,
         'quiet': True,
         'no_warnings': True,
+        'socket_timeout': 15,
+        'retries': 3,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'web'],
+            }
+        },
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
         }
     }
 
@@ -669,26 +743,32 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
                 ydl_opts['format'] = 'bestvideo+bestaudio/best'
                 ydl_opts['merge_output_format'] = 'mp4'
             else:
-                ydl_opts['format'] = 'best[ext=mp4]/best'
+                ydl_opts['format'] = 'best[ext=mp4]/best/bestvideo+bestaudio'
         elif f_norm.endswith('p') and f_norm[:-1].isdigit():
             target_h = int(f_norm[:-1])
             if ffmpeg_available:
                 ydl_opts['format'] = f"bestvideo[height<={target_h}]+bestaudio/best[height<={target_h}]/best"
                 ydl_opts['merge_output_format'] = 'mp4'
             else:
-                ydl_opts['format'] = f"best[height<={target_h}][ext=mp4]/best[height<={target_h}]/best[ext=mp4]/best"
+                ydl_opts['format'] = (
+                    f"best[height<={target_h}][ext=mp4]/"
+                    f"best[height<={target_h}]/"
+                    f"best[ext=mp4]/"
+                    f"best/"
+                    f"bestvideo[height<={target_h}]+bestaudio"
+                )
         elif '+' in format_id or 'bestvideo' in format_id or 'bestaudio' in format_id:
             if ffmpeg_available:
                 ydl_opts['format'] = format_id
                 ydl_opts['merge_output_format'] = 'mp4'
             else:
-                ydl_opts['format'] = 'best[ext=mp4]/best'
+                ydl_opts['format'] = f"{format_id}/best[ext=mp4]/best"
         else:
             if ffmpeg_available:
                 ydl_opts['format'] = f"{format_id}+bestaudio/bestvideo+bestaudio/best"
                 ydl_opts['merge_output_format'] = 'mp4'
             else:
-                ydl_opts['format'] = f"{format_id}[ext=mp4]/best[ext=mp4]/best"
+                ydl_opts['format'] = f"{format_id}[ext=mp4]/{format_id}/best[ext=mp4]/best"
 
     try:
         try:
@@ -777,16 +857,26 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
                     "title": title
                 }))
             return json.dumps({"status": "paused"})
-        err_msg = str(e)
-        if "cancelled" in err_msg.lower():
+        err_info = humanize_error(str(e))
+        err_msg = err_info["friendly"]
+        if "cancelled" in str(e).lower():
             err_msg = "Download cancelled by user."
+            err_info["friendly"] = err_msg
         if callback_obj:
             callback_obj.onError(json.dumps({
                 "status": "error",
                 "error": err_msg,
-                "error_friendly": err_msg
+                "error_friendly": err_info["friendly"],
+                "error_suggestion": err_info["suggestion"],
+                "error_technical": err_info["technical"]
             }))
-        return json.dumps({"status": "error", "error": err_msg})
+        return json.dumps({
+            "status": "error",
+            "error": err_msg,
+            "error_friendly": err_info["friendly"],
+            "error_suggestion": err_info["suggestion"],
+            "error_technical": err_info["technical"]
+        })
 
 
 def check_updates(installed_app_version: str = "v1.4.4") -> str:

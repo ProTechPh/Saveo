@@ -1740,10 +1740,11 @@ input[type="checkbox"] { accent-color: var(--accent); }
 .setting-info code { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); background: var(--bg-input); padding: 1px 4px; border-radius: var(--r-1); }
 
 .setting-control { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.dir-setting-control { display: flex; align-items: center; gap: 8px; min-width: 420px; }
-.dir-setting-control input { flex: 1; min-width: 140px; }
-.concurrent-control { display: flex; align-items: center; gap: 10px; min-width: 200px; }
-.setting-control .custom-select { min-width: 190px; }
+.dir-setting-control { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 480px; }
+.dir-setting-control input { flex: 1; min-width: 0; }
+.dir-setting-actions { display: flex; align-items: center; gap: 6px; }
+.concurrent-control { display: flex; align-items: center; gap: 10px; min-width: 160px; }
+.setting-control .custom-select { min-width: 170px; max-width: 100%; }
 
 .theme-chips-row { display: flex; align-items: center; gap: 6px; }
 
@@ -2052,8 +2053,33 @@ input[type="checkbox"] { accent-color: var(--accent); }
   .history-metrics-grid { grid-template-columns: repeat(2, 1fr); }
   .diag-grid { grid-template-columns: repeat(2, 1fr); }
   .setting-item { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .setting-control, .dir-setting-control, .concurrent-control { width: 100%; min-width: 0; }
+  .setting-item.setting-item-toggle,
+  .setting-item:has(.toggle-switch) {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 16px;
+  }
+  .setting-item.setting-item-toggle .setting-info,
+  .setting-item:has(.toggle-switch) .setting-info {
+    flex: 1;
+    max-width: calc(100% - 64px);
+  }
+  .setting-item.setting-item-toggle .setting-control,
+  .setting-item:has(.toggle-switch) .setting-control {
+    width: auto !important;
+    flex-shrink: 0;
+  }
+  .setting-info { width: 100%; max-width: 100%; }
+  .setting-info span { word-break: break-word; overflow-wrap: anywhere; }
+  .setting-control, .dir-setting-control, .concurrent-control { width: 100%; min-width: 0 !important; max-width: 100% !important; }
+  .dir-setting-control { flex-direction: column; align-items: stretch; gap: 8px; }
+  .dir-setting-control input { width: 100%; flex: 1 1 100%; min-width: 0; }
+  .dir-setting-actions { width: 100%; display: flex; gap: 6px; }
+  .dir-setting-actions button { flex: 1; min-width: 0; justify-content: center; text-align: center; padding: 0 8px; font-size: 12px; }
   .setting-control .custom-select { width: 100%; min-width: 0; }
+  .settings-footer { width: 100%; }
+  .settings-footer button { width: 100%; justify-content: center; padding: 10px 16px; }
   .skeleton-card { grid-template-columns: 1fr; }
   .skeleton-thumb { height: 160px; }
 }
