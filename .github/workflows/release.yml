@@ -2,14 +2,16 @@ name: Build and Publish Releases (Windows & Android)
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Release Tag (e.g. v1.3.6)'
+        description: 'Release Tag (e.g. v1.4.4)'
         required: false
-        default: 'v1.4.3'
+        default: ''
 
 permissions:
   contents: write
@@ -43,13 +45,24 @@ jobs:
       - name: Configure Version Metadata
         shell: pwsh
         run: |
-            $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ inputs.tag_name }}" } else { "${{ github.ref_name }}" }
-            if (-not $tag -or $tag -eq "") { $tag = "v1.4.3" }
-            $tagClean = $tag.TrimStart('v')
-            Write-Host "Configuring Saveo version: $tag (Clean: $tagClean)"
-            Set-Content -Path VERSION -Value $tagClean
-            "SAVEO_VERSION=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
-            "RELEASE_VERSION_CLEAN=$tagClean" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $verFromFile = (Get-Content -Path VERSION -ErrorAction SilentlyContinue)
+          if ($verFromFile) { $verFromFile = $verFromFile.Trim() }
+          if (-not $verFromFile) { $verFromFile = "1.4.4" }
+
+          $tag = ""
+          if ("${{ github.event_name }}" -eq "workflow_dispatch" -and "${{ inputs.tag_name }}") {
+            $tag = "${{ inputs.tag_name }}"
+          } elseif ("${{ github.ref_type }}" -eq "tag") {
+            $tag = "${{ github.ref_name }}"
+          } else {
+            $tag = "v$verFromFile"
+          }
+          if (-not $tag -or $tag -eq "") { $tag = "v$verFromFile" }
+          $tagClean = $tag.TrimStart('v')
+          Write-Host "Configuring Saveo version: $tag (Clean: $tagClean)"
+          Set-Content -Path VERSION -Value $tagClean
+          "SAVEO_VERSION=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RELEASE_VERSION_CLEAN=$tagClean" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Build Standalone (Windows)
         run: |
@@ -145,7 +158,7 @@ jobs:
     name: Publish Release Assets
     needs: [build-windows, build-android]
     runs-on: ubuntu-latest
-    if: (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && !cancelled() && needs.build-windows.result == 'success'
+    if: (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && !cancelled() && needs.build-windows.result == 'success'
 
     steps:
       - name: Checkout Repository
@@ -163,11 +176,18 @@ jobs:
       - name: Determine Release Tag
         id: release_tag
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ inputs.tag_name }}"
-            if [ -z "$TAG" ]; then TAG="v1.4.3"; fi
+          if [ -f VERSION ]; then
+            FILE_VER=$(cat VERSION | tr -d ' \r\n')
           else
+            FILE_VER="1.4.4"
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag_name }}" ]; then
+            TAG="${{ inputs.tag_name }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
             TAG="${{ github.ref_name }}"
+          else
+            TAG="v$FILE_VER"
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
@@ -181,5 +201,6 @@ jobs:
           files: release-assets/*
           name: Saveo ${{ steps.release_tag.outputs.tag }} - Windows & Android Release
           body_path: release_body.md
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
