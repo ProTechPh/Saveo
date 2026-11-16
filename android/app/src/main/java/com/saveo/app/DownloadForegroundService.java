@@ -275,22 +275,27 @@ public class DownloadForegroundService extends Service {
 
     private class ServiceEngineCallback {
         private final String itemTitle;
+        private long lastNotifyTime = 0;
 
         ServiceEngineCallback(String itemTitle) {
             this.itemTitle = itemTitle;
         }
 
         public void onProgress(String progressJson) {
-            try {
-                JSONObject obj = new JSONObject(progressJson);
-                double pct = obj.optDouble("percent", 0.0);
-                String downloadedStr = obj.optString("downloaded_str", "");
-                String totalStr = obj.optString("total_str", "");
-                String speedStr = obj.optString("speed_str", "");
+            long now = System.currentTimeMillis();
+            if (now - lastNotifyTime >= 400) {
+                lastNotifyTime = now;
+                try {
+                    JSONObject obj = new JSONObject(progressJson);
+                    double pct = obj.optDouble("percent", 0.0);
+                    String downloadedStr = obj.optString("downloaded_str", "");
+                    String totalStr = obj.optString("total_str", "");
+                    String speedStr = obj.optString("speed_str", "");
 
-                String text = String.format("%.1f%% • %s / %s (%s)", pct, downloadedStr, totalStr, speedStr);
-                updateProgressNotification(itemTitle, text, (int) pct);
-            } catch (Exception ignored) {}
+                    String text = String.format("%.1f%% • %s / %s (%s)", pct, downloadedStr, totalStr, speedStr);
+                    updateProgressNotification(itemTitle, text, (int) pct);
+                } catch (Exception ignored) {}
+            }
 
             DownloadListener listener = activeListener;
             if (listener != null) {
