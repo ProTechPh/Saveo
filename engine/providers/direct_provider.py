@@ -8,7 +8,7 @@ import re
 import time
 import requests
 from urllib.parse import urlparse, unquote
-from typing import List, Dict, Any, Callable
+from typing import List, Dict, Any, Callable, Optional
 from .base import BaseProvider, MediaMetadata, MediaFormat, ProviderCapabilities
 from ..file_manager import apply_filename_template, get_unique_filename, format_bytes
 

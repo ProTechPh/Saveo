@@ -45,13 +45,15 @@ def build_feed(items: Iterable[Dict[str, Any]], base_url: str, token: str, limit
             published = format_datetime(datetime.fromtimestamp(float(item.get("created_at") or 0), timezone.utc))
         except Exception:
             published = format_datetime(datetime.now(timezone.utc))
+        enclosure_url = escape(media_url, {'"': '&quot;'})
+        mime = media_type_for(item["file_path"])
         channel_items.append(
             "<item>"
             f"<title>{title}</title>"
             f"<description>{description}</description>"
-            f"<guid isPermaLink=\"false\">{escape(item_id)}</guid>"
+            f'<guid isPermaLink="false">{escape(item_id)}</guid>'
             f"<pubDate>{published}</pubDate>"
-            f"<enclosure url=\"{escape(media_url, {'\"': '&quot;'})}\" length=\"{size}\" type=\"{media_type_for(item['file_path'])}\" />"
+            f'<enclosure url="{enclosure_url}" length="{size}" type="{mime}" />'
             "</item>"
         )
 
