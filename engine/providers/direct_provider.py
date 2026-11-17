@@ -10,7 +10,7 @@ import requests
 from urllib.parse import urlparse, unquote
 from typing import List, Dict, Any, Callable
 from .base import BaseProvider, MediaMetadata, MediaFormat, ProviderCapabilities
-from ..file_manager import sanitize_filename, get_unique_filename, format_bytes
+from ..file_manager import apply_filename_template, get_unique_filename, format_bytes
 
 
 DIRECT_MEDIA_EXTENSIONS = {
@@ -110,25 +110,46 @@ class DirectProvider(BaseProvider):
         stem = os.path.splitext(name)[0] or "media"
         ext = os.path.splitext(name)[1] or (".mp3" if is_audio else ".mp4")
 
-        safe_title = sanitize_filename(stem)
+        safe_title = apply_filename_template(filename_template, title or stem)
         target_filename = get_unique_filename(output_dir, f"{safe_title}{ext}")
         final_path = os.path.join(output_dir, target_filename)
+        part_path = f"{final_path}.part"
+
+        # Resume a paused/partial direct download with an HTTP Range request.
+        resume_offset = 0
+        try:
+            if os.path.exists(part_path):
+                resume_offset = os.path.getsize(part_path)
+        except Exception:
+            resume_offset = 0
+
+        headers = dict(DEFAULT_HEADERS)
+        if resume_offset > 0:
+            headers["Range"] = f"bytes={resume_offset}-"
 
         start_time = time.time()
         last_update_time = 0.0
+        downloaded_bytes = resume_offset
+        total_bytes = resume_offset
+        session_start_bytes = resume_offset
+        cancelled = False
 
-        with requests.get(url, headers=DEFAULT_HEADERS, stream=True, timeout=15) as r:
+        with requests.get(url, headers=headers, stream=True, timeout=15) as r:
             r.raise_for_status()
-            total_bytes = int(r.headers.get('content-length', 0))
-            downloaded_bytes = 0
+            if resume_offset > 0 and r.status_code != 206:
+                # Server ignored Range: start the file over instead of appending.
+                resume_offset = 0
+                downloaded_bytes = 0
+                session_start_bytes = 0
+            content_length = int(r.headers.get('content-length', 0))
+            total_bytes = resume_offset + content_length
+            mode = 'ab' if resume_offset > 0 else 'wb'
 
-            with open(final_path, 'wb') as f:
+            with open(part_path, mode) as f:
                 for chunk in r.iter_content(chunk_size=65536):
                     if cancel_check():
-                        f.close()
-                        if os.path.exists(final_path):
-                            os.remove(final_path)
-                        raise Exception("Download cancelled by user.")
+                        cancelled = True
+                        break
 
                     if chunk:
                         f.write(chunk)
@@ -138,12 +159,12 @@ class DirectProvider(BaseProvider):
                         if now - last_update_time >= 0.25:
                             last_update_time = now
                             elapsed = max(now - start_time, 0.001)
-                            speed = downloaded_bytes / elapsed
+                            speed = max(downloaded_bytes - session_start_bytes, 0) / elapsed
                             speed_str = f"{format_bytes(int(speed))}/s"
 
                             eta_str = "--:--"
                             percent = 0.0
-                            if total_bytes > 0:
+                            if total_bytes > 0 and downloaded_bytes <= total_bytes:
                                 percent = round((downloaded_bytes / total_bytes) * 100, 1)
                                 remaining = max(total_bytes - downloaded_bytes, 0)
                                 if speed > 0:
@@ -159,6 +180,25 @@ class DirectProvider(BaseProvider):
                                 "speed_str": speed_str,
                                 "eta_str": eta_str
                             })
+
+        if cancelled:
+            try:
+                os.remove(part_path)
+            except Exception:
+                pass
+            raise Exception("Download cancelled by user.")
+
+        try:
+            os.replace(part_path, final_path)
+        except Exception:
+            # Some filesystems dislike replacing while another task holds the part;
+            # fall back to a copy so the completed file still lands.
+            import shutil
+            shutil.copyfile(part_path, final_path)
+            try:
+                os.remove(part_path)
+            except Exception:
+                pass
 
         # Final progress
         on_progress({

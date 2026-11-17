@@ -756,8 +756,9 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
     Executes download into output_dir and reports progress via callback_obj.
     Automatically places playlist items into a dedicated playlist subfolder if specified.
     """
-    global _is_cancelled
+    global _is_cancelled, _is_paused
     _is_cancelled = False
+    _is_paused = False
 
     if playlist_folder:
         clean_p = sanitize_filename(playlist_folder)
@@ -1079,11 +1080,11 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         })
 
 
-def check_updates(installed_app_version: str = "v1.4.4") -> str:
+def check_updates(installed_app_version: str = "v1.4.15") -> str:
     """
     Checks for updates for Saveo and yt-dlp core.
     """
-    current_app_version = installed_app_version or "v1.4.4"
+    current_app_version = installed_app_version or "v1.4.15"
     if not current_app_version.startswith("v"):
         current_app_version = f"v{current_app_version}"
 

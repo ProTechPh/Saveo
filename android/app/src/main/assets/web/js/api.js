@@ -91,23 +91,11 @@ class SaveoAPI {
     }
   }
 
-  getMobileSettingsSync() {
-    try {
-      let saved = JSON.parse(localStorage.getItem('saveo_mobile_settings') || '{}');
-      if (typeof window.SaveoAndroid !== 'undefined' && window.SaveoAndroid.getSetting) {
-        const raw = window.SaveoAndroid.getSetting("saveo_settings_json", "");
-        if (raw) saved = { ...saved, ...JSON.parse(raw) };
-      }
-      return saved;
-    } catch (e) {
-      return {};
-    }
-  }
-
   processNextMobileQueueItem() {
     if (!this.isNativeMobile()) return;
-    const settings = this.getMobileSettingsSync();
-    const maxConcurrent = Math.min(Math.max(parseInt(settings.max_concurrent_downloads || 3, 10), 1), 5);
+    // The native engine keeps one global pause/cancel flag, so run downloads
+    // sequentially until per-task control lands.
+    const maxConcurrent = 1;
     const queue = this.getMobileQueue();
     const activeDownloading = queue.filter(t => t.status === 'downloading');
 
@@ -325,6 +313,7 @@ class SaveoAPI {
       };
 
       this.eventSource.onerror = () => {
+        this.emit('sse_disconnected');
         // EventSource will automatically retry with backoff.
         // If connection closed completely (e.g. 401 token issue), refresh token and retry.
         if (this.eventSource && this.eventSource.readyState === EventSource.CLOSED) {
@@ -376,6 +365,7 @@ class SaveoAPI {
         error_friendly: 'Cannot connect to Saveo backend server.',
         error_technical: `Network request to ${url} failed (${netErr.message}). Ensure Saveo.exe is currently running.`
       };
+      this.emit('sse_disconnected');
       throw err;
     }
 
@@ -879,17 +869,17 @@ class SaveoAPI {
         return new Promise((resolve) => {
           const handler = (e) => {
             window.removeEventListener('saveo_update_checked', handler);
-            resolve(e.detail || { app_installed: 'v1.4.4', app_latest: 'v1.4.4', app_up_to_date: true });
+            resolve(e.detail || { app_installed: 'v1.4.15', app_latest: 'v1.4.15', app_up_to_date: true });
           };
           window.addEventListener('saveo_update_checked', handler);
           window.SaveoAndroid.checkUpdates();
           setTimeout(() => {
             window.removeEventListener('saveo_update_checked', handler);
-            resolve({ app_installed: 'v1.4.4', app_latest: 'v1.4.4', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true });
+            resolve({ app_installed: 'v1.4.15', app_latest: 'v1.4.15', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true });
           }, 6000);
         });
       }
-      return { app_installed: 'v1.4.4', app_latest: 'v1.4.4', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true };
+      return { app_installed: 'v1.4.15', app_latest: 'v1.4.15', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true };
     }
     return this.request('/api/system/check-updates');
   }

@@ -2,6 +2,34 @@
 
 All notable changes to Saveo will be documented in this file.
 
+## [Unreleased]
+
+- **Download safety & resume:**
+  - Cancelling or failing one download no longer deletes `.part` files belonging to other concurrent downloads.
+  - Pausing now keeps partial files, and resuming continues from the existing `.part` instead of restarting.
+  - Direct-link downloads write to `.part`, resume with HTTP Range, and only replace the final file on completion.
+- **Queue & history reliability:**
+  - Fixed an unlocked queue scan that could silently kill the scheduler thread.
+  - History and settings writes are now serialized and atomic, preventing corrupt JSON under concurrent completions.
+  - Retrying a cancelled/paused task resets pause and progress state correctly.
+- **Android:**
+  - Downloads run one at a time until per-task pause/cancel tracking lands; the UI no longer claims 5 concurrent streams.
+  - Fixed foreground-service double decrements that could stop the service while another download was active.
+  - Resume now starts the foreground notification and increments the active count correctly.
+- **Security & UI:**
+  - Escaped media titles, uploader names, thumbnails, and playlist/batch rows before inserting them into the DOM.
+  - Toast and release-note text is rendered as text, not raw HTML.
+  - Added a path guard to the open-folder endpoint and a 5 MB cap to the thumbnail proxy.
+  - Removed external Google Fonts from the desktop app (fully local/offline again) and allowed pinch zoom.
+  - Clicking the media title now copies it, as the tooltip promised.
+  - The services pill now reflects real SSE disconnects instead of always showing “Services Online”.
+- **Settings:**
+  - `filename_template` is now applied by both providers and exposed in Settings; removed unused `auto_open_folder_on_finish` and `auto_start_batch` defaults.
+  - Concurrent downloads are clamped to 1–5.
+- **Release hygiene:**
+  - Version strings are synced from `VERSION` during releases; README download links use the `latest` assets.
+  - Added a test workflow and a web→Android asset sync check.
+
 ## [1.4.4]
 
 - **Instagram Reel Duration Detection:**

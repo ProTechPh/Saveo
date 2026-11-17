@@ -435,12 +435,21 @@ class SaveoApp {
       document.getElementById('analyze-error').style.display = 'none';
     });
 
-    // Copy title button
-    btnCopyTitle.addEventListener('click', () => {
+    // Copy title (button + clicking the title itself)
+    const copyMediaTitle = () => {
       const title = document.getElementById('media-title').textContent;
-      navigator.clipboard.writeText(title);
-      Components.showToast('Title copied to clipboard!', 'success');
-    });
+      if (!navigator.clipboard || !navigator.clipboard.writeText) {
+        Components.showToast('Clipboard is unavailable.', 'error');
+        return;
+      }
+      navigator.clipboard.writeText(title).then(
+        () => Components.showToast('Title copied to clipboard!', 'success'),
+        () => Components.showToast('Could not copy title.', 'error')
+      );
+    };
+    if (btnCopyTitle) btnCopyTitle.addEventListener('click', copyMediaTitle);
+    const mediaTitleEl = document.getElementById('media-title');
+    if (mediaTitleEl) mediaTitleEl.addEventListener('click', copyMediaTitle);
 
     // Header open folder button (guarded)
     const headerOpenFolder = document.getElementById('header-open-folder');
@@ -1244,7 +1253,10 @@ class SaveoApp {
           download_dir: dirInput ? dirInput.value : (this.settings.download_dir || ''),
           default_video_quality: vQual ? vQual.value : (this.settings.default_video_quality || 'best'),
           default_audio_format: aCodec ? aCodec.value : (this.settings.default_audio_format || 'mp3'),
-          max_concurrent_downloads: sliderConcurrent ? parseInt(sliderConcurrent.value, 10) : (this.settings.max_concurrent_downloads || 3),
+          max_concurrent_downloads: typeof window.SaveoAndroid !== 'undefined'
+            ? 1
+            : (sliderConcurrent ? parseInt(sliderConcurrent.value, 10) : (this.settings.max_concurrent_downloads || 3)),
+          filename_template: (document.getElementById('setting-filename-template')?.value || '{title}').trim() || '{title}',
           notifications: notif ? notif.checked : (this.settings.notifications !== false),
           cookie_browser: cookieBrowser ? cookieBrowser.value : (this.settings.cookie_browser || 'none'),
           cookie_file: cookieInput ? cookieInput.value.trim() : (this.settings.cookie_file || ''),
@@ -1283,10 +1295,25 @@ class SaveoApp {
       if (aCodec) aCodec.value = this.settings.default_audio_format || 'mp3';
 
       const concurrent = document.getElementById('setting-concurrent');
-      if (concurrent) concurrent.value = this.settings.max_concurrent_downloads || 3;
+      if (concurrent) {
+        // Android's pause/cancel state is global, so downloads run one at a time there.
+        const isMobile = typeof window.SaveoAndroid !== 'undefined';
+        concurrent.max = isMobile ? '1' : '5';
+        concurrent.value = isMobile ? 1 : (this.settings.max_concurrent_downloads || 3);
+      }
 
       const badge = document.getElementById('concurrent-val-badge');
-      if (badge) badge.textContent = this.settings.max_concurrent_downloads || 3;
+      if (badge) badge.textContent = concurrent ? concurrent.value : (this.settings.max_concurrent_downloads || 3);
+
+      const filenameInput = document.getElementById('setting-filename-template');
+      if (filenameInput) {
+        filenameInput.value = this.settings.filename_template || '{title}';
+        // The embedded Android engine names files from the media title only.
+        if (typeof window.SaveoAndroid !== 'undefined') {
+          const row = filenameInput.closest('.setting-item');
+          if (row) row.style.display = 'none';
+        }
+      }
 
       const notif = document.getElementById('setting-notifications');
       if (notif) notif.checked = this.settings.notifications !== false;
@@ -1309,10 +1336,23 @@ class SaveoApp {
     }
   }
 
+  setServicesStatus(state) {
+    const pill = document.getElementById('server-status-pill');
+    const label = document.getElementById('server-status-label');
+    if (!pill || !label) return;
+    if (state === 'reconnecting') {
+      pill.className = 'header-server-pill status-reconnecting';
+      label.textContent = 'Reconnecting...';
+    } else {
+      pill.className = 'header-server-pill status-ready';
+      label.textContent = 'Services Online';
+    }
+  }
+
   async loadSystemStatus() {
     try {
       const status = await api.getSystemStatus();
-      const appVer = status.app_version || 'v1.4.4';
+      const appVer = status.app_version || 'v1.4.15';
       const rawYtdlp = status.ytdlp_version;
 
       const verPill = document.getElementById('header-version-pill');
@@ -1331,14 +1371,7 @@ class SaveoApp {
       const trustVer = document.getElementById('trust-version');
       if (trustVer) trustVer.textContent = appVer;
 
-      const serverPill = document.getElementById('server-status-pill');
-      const serverLabel = document.getElementById('server-status-label');
-      if (serverPill) {
-        serverPill.className = 'header-server-pill status-ready';
-      }
-      if (serverLabel) {
-        serverLabel.textContent = 'Services Online';
-      }
+      this.setServicesStatus('ready');
 
       const diagYtdlp = document.getElementById('diag-ytdlp');
       if (diagYtdlp) {
@@ -1464,6 +1497,7 @@ class SaveoApp {
         if (/^[-*+]\s+/.test(line)) {
           let content = line.replace(/^[-*+]\s+/, '').trim();
           if (!content || content === '-' || content === '--') continue;
+          content = Components.escapeHtml(content);
           content = content.replace(/\*\*(.*?)\*\*:?/g, (match, p1) => {
             const title = p1.replace(/:+$/, '').trim();
             return `<span class="cl-feature-highlight">${title}:</span>`;
@@ -1492,7 +1526,7 @@ class SaveoApp {
       const curVerEl = document.getElementById('update-cur-ver');
       const newVerEl = document.getElementById('update-new-ver');
 
-      if (curVerEl) curVerEl.textContent = 'v1.4.4';
+      if (curVerEl) curVerEl.textContent = 'v1.4.15';
       if (newVerEl) newVerEl.textContent = '...';
       if (titleEl) titleEl.textContent = 'Checking for Updates...';
       if (descEl) descEl.textContent = 'Contacting update servers to verify Saveo release and platform core engine status...';
@@ -1501,8 +1535,8 @@ class SaveoApp {
       try {
         const info = await api.checkUpdates();
         currentUpdateInfo = info;
-        const appInst = info.app_installed || 'v1.4.4';
-        const appLatest = info.app_latest || 'v1.4.4';
+        const appInst = info.app_installed || 'v1.4.15';
+        const appLatest = info.app_latest || 'v1.4.15';
         const isUpToDate = Boolean(info.app_up_to_date);
 
         if (curVerEl) curVerEl.textContent = appInst;
@@ -1540,8 +1574,8 @@ class SaveoApp {
           downloadState = 'can-download';
         }
       } catch (e) {
-        if (curVerEl) curVerEl.textContent = 'v1.4.4';
-        if (newVerEl) newVerEl.textContent = 'v1.4.4';
+        if (curVerEl) curVerEl.textContent = 'v1.4.15';
+        if (newVerEl) newVerEl.textContent = 'v1.4.15';
         if (titleEl) titleEl.textContent = 'Saveo Core Engine';
         if (descEl) descEl.textContent = 'Verified online. You can check the embedded yt-dlp core engine.';
         if (changelogEl) changelogEl.innerHTML = renderChangelog('');
@@ -1580,7 +1614,7 @@ class SaveoApp {
     if (btnPrimary) {
       btnPrimary.addEventListener('click', async () => {
       if (downloadState === 'can-download') {
-        const url = currentUpdateInfo?.installer_url || `https://github.com/ProTechPh/Saveo/releases/download/${currentUpdateInfo?.app_latest || 'v1.3.7'}/Saveo-Setup.exe`;
+        const url = currentUpdateInfo?.installer_url || `https://github.com/ProTechPh/Saveo/releases/download/${currentUpdateInfo?.app_latest || 'v1.4.15'}/Saveo-Setup.exe`;
         const size = currentUpdateInfo?.installer_size || 0;
 
         downloadState = 'downloading';
@@ -1690,7 +1724,8 @@ class SaveoApp {
           if (statusMsg) {
             statusMsg.style.display = 'block';
             statusMsg.style.color = '#f59e0b';
-            statusMsg.innerHTML = `${e.message} <br/><a href="#" id="link-open-installer-folder" style="color:var(--accent);text-decoration:underline;display:inline-block;margin-top:6px;font-weight:500;">Open Installer in Downloads</a>`;
+            const safeMessage = Components.escapeHtml(e.message || '');
+            statusMsg.innerHTML = `${safeMessage} <br/><a href="#" id="link-open-installer-folder" style="color:var(--accent);text-decoration:underline;display:inline-block;margin-top:6px;font-weight:500;">Open Installer in Downloads</a>`;
             const openLink = document.getElementById('link-open-installer-folder');
             if (openLink) {
               openLink.addEventListener('click', (evt) => {
@@ -1779,6 +1814,9 @@ class SaveoApp {
 
   // ================= WEBSOCKET & NATIVE EVENT LISTENERS =================
   setupWebSocketListeners() {
+    api.on('sse_connected', () => this.setServicesStatus('ready'));
+    api.on('sse_disconnected', () => this.setServicesStatus('reconnecting'));
+
     api.on('initial_state', (payload) => {
       if (payload && Array.isArray(payload.tasks)) {
         this.tasks = payload.tasks;

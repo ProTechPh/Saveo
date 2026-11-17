@@ -27,6 +27,10 @@ class TestRealDownload(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
+    @unittest.skipUnless(
+        os.environ.get("SAVEO_NETWORK_TESTS") == "1",
+        "network test: set SAVEO_NETWORK_TESTS=1 to run",
+    )
     def test_direct_provider_real_download(self):
         sample_url = "https://filesamples.com/samples/video/mp4/sample_640x360.mp4"
         provider = registry.get_provider_for_url(sample_url)

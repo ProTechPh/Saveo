@@ -8,7 +8,7 @@
 
 *Download Videos, Reels, Shorts, playlists, albums, and audio from YouTube, Instagram, TikTok, Facebook, Reddit, X, Bilibili, and 1,000+ supported media sites at full quality — with live progress and speed tracking.*
 
-[![Latest Release](https://img.shields.io/badge/Release-v1.4.4-6366f1.svg?style=flat-square)](https://github.com/ProTechPh/Saveo/releases)
+[![Latest Release](https://img.shields.io/github/v/release/ProTechPh/Saveo?style=flat-square&color=6366f1)](https://github.com/ProTechPh/Saveo/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00d2ff.svg?style=flat-square)](LICENSE)
 [![Website](https://img.shields.io/badge/Website-Live-e5b04a.svg?style=flat-square)](https://protechph.github.io/Saveo/)
 [![Platform: Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20(Stable)-0078d4.svg?style=flat-square&logo=windows)](https://github.com/ProTechPh/Saveo/releases)
@@ -139,10 +139,10 @@ Saveo provides pre-compiled packages for Windows and Android. Development tools 
 
 *The primary Saveo experience, powered by the full Windows download engine.*
 
-| Package | Format | Download (v1.4.4) | Latest Mirror |
+| Package | Format | Download (Latest) | Latest Mirror |
 | :--- | :--- | :--- | :--- |
-| **Saveo Setup** *(Recommended)* | `.exe` Modern Installer | [**Download v1.4.4**](https://github.com/ProTechPh/Saveo/releases/download/v1.4.4/Saveo-Setup.exe) | [Latest Installer Mirror](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Setup.exe) |
-| **Saveo Portable** | Standalone `.zip` | [**Download v1.4.4**](https://github.com/ProTechPh/Saveo/releases/download/v1.4.4/Saveo-Windows-x64.zip) | [Latest ZIP Mirror](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Windows-x64.zip) |
+| **Saveo Setup** *(Recommended)* | `.exe` Modern Installer | [**Download Saveo-Setup.exe**](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Setup.exe) | [Latest Installer Mirror](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Setup.exe) |
+| **Saveo Portable** | Standalone `.zip` | [**Download Saveo-Windows-x64.zip**](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Windows-x64.zip) | [Latest ZIP Mirror](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Windows-x64.zip) |
 
 #### Install or launch
 
@@ -178,7 +178,7 @@ Saveo provides pre-compiled packages for Windows and Android. Development tools 
 
 | Package | Supported Architectures | Direct Package | Releases |
 | :--- | :--- | :--- | :--- |
-| **Saveo for Android** | `arm64-v8a`, `armeabi-v7a`, `x86_64` | [**Download APK (v1.4.4)**](https://github.com/ProTechPh/Saveo/releases/download/v1.4.4/Saveo-Android.apk) | [All Releases](https://github.com/ProTechPh/Saveo/releases) |
+| **Saveo for Android** | `arm64-v8a`, `armeabi-v7a`, `x86_64` | [**Download Saveo-Android.apk**](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Android.apk) | [All Releases](https://github.com/ProTechPh/Saveo/releases) |
 
 #### Installation
 

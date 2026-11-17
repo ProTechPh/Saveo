@@ -7,6 +7,7 @@ import os
 import sys
 import shutil
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -16,7 +17,7 @@ sys.path.insert(0, str(root_dir))
 
 from engine.providers.registry import registry
 from engine.providers.ytdlp_provider import humanize_error, YtDlpProvider, _mp4_duration_seconds
-from engine.file_manager import sanitize_filename, get_unique_filename, format_bytes, format_seconds
+from engine.file_manager import sanitize_filename, apply_filename_template, get_unique_filename, format_bytes, format_seconds
 from engine.settings_manager import SettingsManager
 from engine.history_manager import HistoryManager
 from engine.queue_manager import QueueManager, DownloadTask
@@ -93,6 +94,25 @@ class TestSaveoCore(unittest.TestCase):
         self.assertEqual(format_seconds(125), "02:05")
         self.assertEqual(format_seconds(3665), "01:01:05")
 
+    def test_filename_template(self):
+        """The {title} template is applied and sanitized by both providers."""
+        self.assertEqual(apply_filename_template("{title} [Saveo]", "My: Video"), "My Video [Saveo]")
+        self.assertEqual(apply_filename_template("", "Plain Title"), "Plain Title")
+        self.assertEqual(apply_filename_template("{title}", ""), "saveo_media")
+
+    def test_cancel_clears_paused_flag(self):
+        """A paused task that is then cancelled must not stay paused on retry."""
+        task = DownloadTask(
+            url="https://example.com/video.mp4",
+            title="Sample",
+            output_dir=self.temp_dir,
+        )
+        task.pause()
+        self.assertTrue(task.is_paused())
+        task.cancel()
+        self.assertFalse(task.is_paused())
+        self.assertEqual(task.status, "cancelled")
+
     def test_audio_format_distinct_sizes(self):
         """Test that distinct AAC and Opus streams yield distinct estimated sizes."""
         provider = YtDlpProvider()
@@ -141,6 +161,12 @@ class TestSaveoCore(unittest.TestCase):
         self.assertEqual(sm_reloaded.get("theme"), "oled")
         self.assertEqual(sm_reloaded.get("cookie_file"), "C:/path/cookies.txt")
 
+        # Out-of-range concurrency is clamped instead of stopping the queue.
+        sm_reloaded.update({"max_concurrent_downloads": 99})
+        self.assertEqual(sm_reloaded.get("max_concurrent_downloads"), 5)
+        sm_reloaded.update({"max_concurrent_downloads": 0})
+        self.assertEqual(sm_reloaded.get("max_concurrent_downloads"), 1)
+
     def test_history_manager(self):
         """Test download history recording, listing, and deletion."""
         hist_dir = Path(self.temp_dir) / "history"
@@ -166,6 +192,23 @@ class TestSaveoCore(unittest.TestCase):
         res = hm.remove_entry("item-101")
         self.assertTrue(res)
         self.assertEqual(len(hm.get_all()), 0)
+
+    def test_history_concurrent_writes(self):
+        """Completion callbacks from several workers must not lose or corrupt entries."""
+        hist_dir = Path(self.temp_dir) / "history-concurrent"
+        hm = HistoryManager(hist_dir)
+
+        def add(i):
+            hm.add_entry({"id": f"item-{i}", "title": f"Video {i}"})
+
+        threads = [threading.Thread(target=add, args=(i,)) for i in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        self.assertEqual(len(hm.get_all()), 20)
+        self.assertEqual(len(HistoryManager(hist_dir).get_all()), 20)
 
     def test_queue_task_lifecycle(self):
         """Test queue task state changes, cancellation and retrying."""

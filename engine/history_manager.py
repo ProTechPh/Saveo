@@ -6,6 +6,7 @@ Maintains records of completed, failed, and past downloads locally.
 import json
 import os
 import shutil
+import threading
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -23,6 +24,7 @@ class HistoryManager:
         except Exception:
             pass
         self.history_file = self.config_dir / "history.json"
+        self._lock = threading.RLock()
         self._history: List[Dict[str, Any]] = self._load()
 
     def _load(self) -> List[Dict[str, Any]]:
@@ -37,13 +39,16 @@ class HistoryManager:
 
     def _save(self):
         try:
-            with open(self.history_file, "w", encoding="utf-8") as f:
+            tmp_file = self.history_file.with_suffix(".json.tmp")
+            with open(tmp_file, "w", encoding="utf-8") as f:
                 json.dump(self._history, f, indent=2)
+            os.replace(tmp_file, self.history_file)
         except Exception as e:
             print(f"Error saving download history: {e}")
 
     def get_all(self) -> List[Dict[str, Any]]:
-        return list(reversed(self._history))
+        with self._lock:
+            return list(reversed(self._history))
 
     def add_entry(self, entry: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -67,37 +72,40 @@ class HistoryManager:
             "created_at_str": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(entry.get("created_at", time.time()))),
         }
 
-        # Check if record with this id already exists, update it
-        existing_idx = next((i for i, item in enumerate(self._history) if item.get("id") == record["id"]), None)
-        if existing_idx is not None:
-            self._history[existing_idx] = record
-        else:
-            self._history.append(record)
+        with self._lock:
+            # Check if record with this id already exists, update it
+            existing_idx = next((i for i, item in enumerate(self._history) if item.get("id") == record["id"]), None)
+            if existing_idx is not None:
+                self._history[existing_idx] = record
+            else:
+                self._history.append(record)
 
-        self._save()
+            self._save()
         return record
 
     def remove_entry(self, entry_id: str, delete_file: bool = False) -> bool:
         """
         Remove record from history. If delete_file is True, also deletes the actual local file.
         """
-        idx = next((i for i, item in enumerate(self._history) if item.get("id") == entry_id), None)
-        if idx is not None:
-            item = self._history.pop(idx)
-            if delete_file:
-                fp = item.get("file_path")
-                if fp and os.path.exists(fp):
-                    try:
-                        os.remove(fp)
-                    except Exception as e:
-                        print(f"Error removing file {fp}: {e}")
-            self._save()
-            return True
+        with self._lock:
+            idx = next((i for i, item in enumerate(self._history) if item.get("id") == entry_id), None)
+            if idx is not None:
+                item = self._history.pop(idx)
+                if delete_file:
+                    fp = item.get("file_path")
+                    if fp and os.path.exists(fp):
+                        try:
+                            os.remove(fp)
+                        except Exception as e:
+                            print(f"Error removing file {fp}: {e}")
+                self._save()
+                return True
         return False
 
     def clear_all(self):
-        self._history = []
-        self._save()
+        with self._lock:
+            self._history = []
+            self._save()
 
 
 history_manager = HistoryManager()

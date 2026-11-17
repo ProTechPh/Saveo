@@ -4,7 +4,6 @@ Coordinates concurrent download jobs, batch queues, status tracking,
 cancellation, retries, and real-time event broadcasts.
 """
 
-import os
 import time
 import uuid
 import threading
@@ -72,6 +71,7 @@ class DownloadTask:
 
     def cancel(self):
         self._cancelled = True
+        self._paused = False
         self.status = "cancelled"
 
     def is_cancelled(self) -> bool:
@@ -209,23 +209,11 @@ class QueueManager:
         with self._lock:
             return [self.tasks[tid].to_dict() for tid in self.task_order if tid in self.tasks]
 
-    def _cleanup_partial_files(self, task: DownloadTask):
-        try:
-            if task.output_dir and os.path.isdir(task.output_dir):
-                for fn in os.listdir(task.output_dir):
-                    if fn.endswith('.part') or '.temp' in fn:
-                        fp = os.path.join(task.output_dir, fn)
-                        if os.path.isfile(fp):
-                            os.remove(fp)
-        except Exception:
-            pass
-
     def cancel_task(self, task_id: str) -> bool:
         with self._lock:
             task = self.tasks.get(task_id)
             if task:
                 task.cancel()
-                self._cleanup_partial_files(task)
                 self._broadcast("task_updated", task)
                 return True
         return False
@@ -252,11 +240,14 @@ class QueueManager:
         with self._lock:
             task = self.tasks.get(task_id)
             if task and task.status in ("failed", "cancelled"):
-                self._cleanup_partial_files(task)
                 task.status = "queued"
                 task._cancelled = False
+                task._paused = False
                 task.percent = 0.0
                 task.downloaded_bytes = 0
+                task.total_bytes = 0
+                task.speed_str = "-- KB/s"
+                task.eta_str = "--:--"
                 task.error_friendly = None
                 task.error_suggestion = None
                 task.error_technical = None
@@ -290,25 +281,35 @@ class QueueManager:
         """Monitors queue and submits queued tasks up to max_concurrent_downloads."""
         while self._running:
             time.sleep(0.3)
-            max_concurrent = int(settings_manager.get("max_concurrent_downloads", 3))
+            try:
+                try:
+                    max_concurrent = int(settings_manager.get("max_concurrent_downloads", 3))
+                except (TypeError, ValueError):
+                    max_concurrent = 3
+                max_concurrent = max(1, min(5, max_concurrent))
 
-            active_count = sum(1 for t in self.tasks.values() if t.status in ("downloading", "processing"))
-            if active_count >= max_concurrent:
-                continue
+                with self._lock:
+                    active_count = sum(1 for t in self.tasks.values() if t.status in ("downloading", "processing"))
+                if active_count >= max_concurrent:
+                    continue
 
-            # Find next queued task
-            task_to_run = None
-            with self._lock:
-                for tid in reversed(self.task_order):
-                    t = self.tasks[tid]
-                    if t.status == "queued":
-                        task_to_run = t
-                        t.status = "downloading"
-                        break
+                # Find next queued task
+                task_to_run = None
+                with self._lock:
+                    for tid in reversed(self.task_order):
+                        t = self.tasks.get(tid)
+                        if t and t.status == "queued":
+                            task_to_run = t
+                            t.status = "downloading"
+                            break
 
-            if task_to_run:
-                self._broadcast("task_updated", task_to_run)
-                self._executor.submit(self._execute_task, task_to_run)
+                if task_to_run:
+                    self._broadcast("task_updated", task_to_run)
+                    self._executor.submit(self._execute_task, task_to_run)
+            except Exception as e:
+                # Keep the scheduler alive; a dead worker thread silently stops the whole queue.
+                print(f"Queue loop error: {e}")
+                time.sleep(1)
 
     def _execute_task(self, task: DownloadTask):
         try:
@@ -416,7 +417,6 @@ class QueueManager:
             else:
                 friendly = err_str
 
-            self._cleanup_partial_files(task)
             task.status = "failed"
             task.error_friendly = friendly
             task.error_suggestion = suggestion

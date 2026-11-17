@@ -32,7 +32,13 @@ except ImportError:
 
 
 from .base import BaseProvider, MediaMetadata, MediaFormat, ProviderCapabilities
-from ..file_manager import sanitize_filename, get_unique_filename, format_bytes, format_seconds, resolve_existing_path
+from ..file_manager import (
+    apply_filename_template,
+    get_unique_filename,
+    format_bytes,
+    format_seconds,
+    resolve_existing_path,
+)
 
 
 PLATFORM_PATTERNS = [
@@ -843,7 +849,24 @@ class YtDlpProvider(BaseProvider):
         final_file_info = {}
         target_codec = audio_format.lower() if audio_format else "mp3"
 
+        # Files written by this task only. Never sweep the whole output folder:
+        # concurrent downloads keep their own .part files there.
+        task_files = set()
+
+        def cleanup_task_files():
+            for path in list(task_files):
+                for candidate in (path, f"{path}.part"):
+                    try:
+                        if candidate and os.path.isfile(candidate):
+                            os.remove(candidate)
+                    except Exception:
+                        pass
+
         def ytdl_hook(d):
+            for p in (d.get('filename'), d.get('tmpfilename')):
+                if p:
+                    task_files.add(p)
+
             if cancel_check():
                 raise Exception("Download cancelled by user.")
 
@@ -890,9 +913,10 @@ class YtDlpProvider(BaseProvider):
 
         # Determine target extension and unique filename to prevent yt-dlp skipping duplicate downloads
         target_ext = f".{audio_format.lower() if audio_format else 'mp3'}" if is_audio else ".mp4"
-        clean_title = sanitize_filename(title.strip() if title else "", max_length=150) if title else ""
+        raw_title = title.strip() if title else ""
+        clean_title = apply_filename_template(filename_template, raw_title) if raw_title else ""
         chosen_stem = ""
-        if clean_title and clean_title.lower() not in ("analyzing...", "web media", "unknown"):
+        if clean_title and raw_title.lower() not in ("analyzing...", "web media", "unknown"):
             candidate = f"{clean_title}{target_ext}"
             unique_name = get_unique_filename(output_dir, candidate)
             chosen_stem = Path(unique_name).stem
@@ -914,7 +938,7 @@ class YtDlpProvider(BaseProvider):
             'extractor_retries': 5,
             'file_access_retries': 3,
             'overwrites': True,        # CRITICAL: Always overwrite target stem so yt-dlp never skips download
-            'continuedl': False,
+            'continuedl': True,        # Resume the .part left by a paused download (same stem)
             'progress_hooks': [ytdl_hook],
             'postprocessor_hooks': [ytdl_postprocessor_hook],
             'restrictfilenames': False,
@@ -1003,16 +1027,14 @@ class YtDlpProvider(BaseProvider):
             with ytdlp_mod.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
         except Exception as e:
-            # Clean up partial files from aborted or errored download
+            # A pause raises from cancel_check: keep this task's .part files for resume.
             try:
-                for fn in os.listdir(output_dir):
-                    if fn.endswith('.part') or '.temp' in fn:
-                        fp = os.path.join(output_dir, fn)
-                        if os.path.isfile(fp):
-                            os.remove(fp)
+                cancelled = cancel_check()
             except Exception:
-                pass
-            if cancel_check():
+                raise
+            # Cancel or hard failure: remove only the files this task touched.
+            cleanup_task_files()
+            if cancelled:
                 raise Exception("Download cancelled by user.")
             err_dict = humanize_error(str(e))
             raise ValueError(f"{err_dict['friendly']}|SPLIT|{err_dict.get('suggestion', '')}|SPLIT|{err_dict['technical']}")
@@ -1050,10 +1072,14 @@ class YtDlpProvider(BaseProvider):
                 saved_file = resolve_existing_path(final_file_info['finished_path'])
 
         if not saved_file or not os.path.exists(saved_file):
-            # Scan directory for the most recently modified file in output_dir
-            files = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if not f.endswith('.part')]
-            if files:
-                saved_file = max(files, key=os.path.getmtime)
+            # Scan the output folder, preferring files that belong to this task's stem.
+            candidates = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if not f.endswith('.part')]
+            if chosen_stem:
+                own_files = [f for f in candidates if os.path.basename(f).startswith(chosen_stem)]
+                if own_files:
+                    candidates = own_files
+            if candidates:
+                saved_file = max(candidates, key=os.path.getmtime)
 
         if not saved_file or not os.path.exists(saved_file):
             raise Exception("Download completed but destination file could not be located.")

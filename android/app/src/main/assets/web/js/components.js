@@ -47,7 +47,10 @@ const Components = {
       iconSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
     }
 
-    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
+    toast.innerHTML = iconSvg;
+    const textEl = document.createElement('span');
+    textEl.textContent = message;
+    toast.appendChild(textEl);
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -88,8 +91,8 @@ const Components = {
       chip.setAttribute('data-fid', fmt.format_id);
 
       chip.innerHTML = `
-        <span class="chip-label">${fmt.label || fmt.resolution}</span>
-        <span class="chip-size">${fmt.filesize_str || 'Standard'}</span>
+        <span class="chip-label">${this.escapeHtml(fmt.label || fmt.resolution || '')}</span>
+        <span class="chip-size">${this.escapeHtml(fmt.filesize_str || 'Standard')}</span>
       `;
 
       chip.addEventListener('click', () => {
@@ -126,8 +129,8 @@ const Components = {
       chip.setAttribute('data-fid', fmt.format_id);
 
       chip.innerHTML = `
-        <span class="chip-label">${fmt.label}</span>
-        <span class="chip-size">${fmt.filesize_str || (fmt.ext ? fmt.ext.toUpperCase() : 'Audio')}</span>
+        <span class="chip-label">${this.escapeHtml(fmt.label || '')}</span>
+        <span class="chip-size">${this.escapeHtml(fmt.filesize_str || (fmt.ext ? fmt.ext.toUpperCase() : 'Audio'))}</span>
       `;
 
       chip.addEventListener('click', () => {
@@ -212,6 +215,11 @@ const Components = {
       thumbSrc = `/api/proxy/thumbnail?url=${encodeURIComponent(thumbSrc)}`;
     }
     const platformIcon = this.getPlatformIcon(task.platform);
+    const safeTitle = this.escapeHtml(task.title || 'Media');
+    const safeTitleAttr = this.escapeAttr(task.title || 'Media');
+    const safePlatform = this.escapeHtml(task.platform || 'Media');
+    const safeThumb = this.escapeAttr(thumbSrc);
+    const safeError = this.escapeHtml(task.error_friendly || '');
 
     let statusClass = task.status || 'queued';
     let statusLabel = task.status || 'Queued';
@@ -225,12 +233,12 @@ const Components = {
 
     card.innerHTML = `
       <div style="position: relative;">
-        ${thumbSrc ? `<img class="queue-item-thumb" referrerpolicy="no-referrer" src="${thumbSrc}" alt="thumb" onerror="if(!this.src.includes('/api/proxy/thumbnail') && '${this.escapeAttr(task.thumbnail || '')}'){this.src='/api/proxy/thumbnail?url=' + encodeURIComponent('${this.escapeAttr(task.thumbnail || '')}');}else{this.style.display='none';}" />` : `<div class="queue-item-thumb" style="display:flex;align-items:center;justify-content:center;font-size:22px;">${platformIcon}</div>`}
+        ${thumbSrc ? `<img class="queue-item-thumb" referrerpolicy="no-referrer" src="${safeThumb}" alt="thumb" />` : `<div class="queue-item-thumb" style="display:flex;align-items:center;justify-content:center;font-size:22px;">${platformIcon}</div>`}
       </div>
       <div class="queue-item-info">
         <div class="queue-item-title-row">
-          <span class="queue-item-title" title="${task.title}">${task.title}</span>
-          <span class="queue-item-platform">${task.platform || 'Media'}</span>
+          <span class="queue-item-title" title="${safeTitleAttr}">${safeTitle}</span>
+          <span class="queue-item-platform">${safePlatform}</span>
           <span class="status-tag ${statusClass}">${statusLabel}</span>
         </div>
         <div class="queue-item-progress-track">
@@ -239,12 +247,23 @@ const Components = {
         <div class="queue-item-meta-row">
           ${metaRowContent}
         </div>
-        ${task.error_friendly ? `<div class="queue-item-error-msg">${task.error_friendly}</div>` : ''}
+        ${task.error_friendly ? `<div class="queue-item-error-msg">${safeError}</div>` : ''}
       </div>
       <div class="queue-item-actions" data-action-key="${this._actionKey(task)}">
         ${actionButtons}
       </div>
     `;
+
+    const thumbEl = card.querySelector('img.queue-item-thumb');
+    if (thumbEl) {
+      thumbEl.addEventListener('error', () => {
+        if (thumbSrc && !thumbEl.src.includes('/api/proxy/thumbnail')) {
+          thumbEl.src = `/api/proxy/thumbnail?url=${encodeURIComponent(thumbSrc)}`;
+        } else {
+          thumbEl.style.display = 'none';
+        }
+      });
+    }
 
     return card;
   },
@@ -263,30 +282,30 @@ const Components = {
   _getQueueItemActions(task) {
     if (task.status === 'downloading' || task.status === 'processing') {
       return `
-        <button class="icon-btn-pause" data-action="pause" data-id="${task.id}" title="Pause">
+        <button class="icon-btn-pause" data-action="pause" data-id="${this.escapeAttr(task.id)}" title="Pause">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>
         </button>
-        <button class="icon-btn-cancel" data-action="cancel" data-id="${task.id}" title="Cancel">
+        <button class="icon-btn-cancel" data-action="cancel" data-id="${this.escapeAttr(task.id)}" title="Cancel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       `;
     } else if (task.status === 'paused') {
       return `
-        <button class="secondary-btn btn-sm" data-action="resume" data-id="${task.id}" title="Resume">
+        <button class="secondary-btn btn-sm" data-action="resume" data-id="${this.escapeAttr(task.id)}" title="Resume">
           <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
           <span>Resume</span>
         </button>
-        <button class="icon-btn" data-action="remove" data-id="${task.id}" title="Remove">
+        <button class="icon-btn" data-action="remove" data-id="${this.escapeAttr(task.id)}" title="Remove">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       `;
     } else if (task.status === 'failed' || task.status === 'cancelled') {
       return `
-        <button class="secondary-btn btn-sm" data-action="retry" data-id="${task.id}" title="Retry">
+        <button class="secondary-btn btn-sm" data-action="retry" data-id="${this.escapeAttr(task.id)}" title="Retry">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"></path><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
           <span>Retry</span>
         </button>
-        <button class="icon-btn" data-action="remove" data-id="${task.id}" title="Remove">
+        <button class="icon-btn" data-action="remove" data-id="${this.escapeAttr(task.id)}" title="Remove">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       `;
@@ -304,7 +323,7 @@ const Components = {
       `;
     } else {
       return `
-        <button class="icon-btn" data-action="remove" data-id="${task.id}" title="Remove">
+        <button class="icon-btn" data-action="remove" data-id="${this.escapeAttr(task.id)}" title="Remove">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       `;
@@ -312,54 +331,61 @@ const Components = {
   },
 
   _getQueueItemMeta(task) {
+    const safeFormat = this.escapeHtml(task.format_label || '');
+    const safeSpeed = this.escapeHtml(task.speed_str || '-- KB/s');
+    const safeDownloaded = this.escapeHtml(task.downloaded_str || '0 B');
+    const safeTotal = this.escapeHtml(task.total_str || '0 B');
+    const safeEta = this.escapeHtml(task.eta_str || '--:--');
+    const safeExpected = this.escapeHtml((task.expected_size_str || '').split('•')[0].trim());
+    const safeSize = this.escapeHtml(task.file_size_str || task.total_str || '');
+
     if (task.status === 'paused') {
       return `
         <span class="meta-warn">Download Paused (${task.percent ? task.percent.toFixed(1) : '0.0'}%)</span>
-        <span class="meta-format">${task.format_label || ''}</span>
+        <span class="meta-format">${safeFormat}</span>
       `;
     }
     if (task.status === 'cancelled') {
       return `
         <span class="meta-warn">Download Cancelled</span>
-        <span class="meta-format">${task.format_label || ''}</span>
+        <span class="meta-format">${safeFormat}</span>
       `;
     }
     if (task.status === 'failed') {
       return `
         <span class="meta-bad">Download Failed</span>
-        <span class="meta-format">${task.format_label || ''}</span>
+        <span class="meta-format">${safeFormat}</span>
       `;
     }
     if (task.status === 'completed') {
       return `
         <span class="meta-good">Completed (100%)</span>
-        <span>${task.file_size_str || task.total_str || ''}</span>
-        <span class="meta-format">${task.format_label || ''}</span>
+        <span>${safeSize}</span>
+        <span class="meta-format">${safeFormat}</span>
       `;
     }
     if (task.status === 'processing') {
       const isAudio = Boolean(task.is_audio);
-      const audioFmt = (task.audio_format || 'audio').toUpperCase();
+      const audioFmt = this.escapeHtml((task.audio_format || 'audio').toUpperCase());
       const encLabel = isAudio ? `Encoding ${audioFmt}` : 'Finishing up...';
-      const targetStr = task.expected_size_str ? ` (~${task.expected_size_str.split('•')[0].trim()})` : '';
+      const targetStr = safeExpected ? ` (~${safeExpected})` : '';
       return `
         <span class="meta-info">${encLabel}${targetStr}</span>
-        <span>${task.eta_str || '--:--'}</span>
-        <span class="meta-format">${task.format_label || ''}</span>
+        <span>${safeEta}</span>
+        <span class="meta-format">${safeFormat}</span>
       `;
     }
     const isAudio = Boolean(task.is_audio);
-    const audioFmt = (task.audio_format || 'audio').toUpperCase();
-    const targetSizeClean = (task.expected_size_str || '').split('•')[0].trim();
-    const targetHint = (isAudio && targetSizeClean && ['MP3', 'WAV'].includes(audioFmt))
-      ? ` • Target: ~${targetSizeClean}`
+    const audioFmt = this.escapeHtml((task.audio_format || 'audio').toUpperCase());
+    const targetHint = (isAudio && safeExpected && ['MP3', 'WAV'].includes((task.audio_format || '').toUpperCase()))
+      ? ` • Target: ~${safeExpected}`
       : '';
     return `
       <span>${task.percent ? task.percent.toFixed(1) : '0.0'}%</span>
-      <span>${task.speed_str || '-- KB/s'}</span>
-      <span>${task.downloaded_str || '0 B'} / ${task.total_str || '0 B'}${targetHint}</span>
-      <span>ETA: ${task.eta_str || '--:--'}</span>
-      <span class="meta-format">${task.format_label || ''}</span>
+      <span>${safeSpeed}</span>
+      <span>${safeDownloaded} / ${safeTotal}${targetHint}</span>
+      <span>ETA: ${safeEta}</span>
+      <span class="meta-format">${safeFormat}</span>
     `;
   },
 
@@ -489,7 +515,16 @@ const Components = {
 
     const entries = data.playlist_entries || [];
     const count = data.playlist_count || entries.length;
-    const thumb = data.thumbnail || (entries[0] && entries[0].thumbnail) || '';
+    let thumb = data.thumbnail || (entries[0] && entries[0].thumbnail) || '';
+    if (thumb.startsWith('//')) thumb = `https:${thumb}`;
+    if (thumb.includes('hdslb.com') || thumb.includes('bilibili.com')) {
+      thumb = `/api/proxy/thumbnail?url=${encodeURIComponent(thumb)}`;
+    }
+    const safeThumb = this.escapeAttr(thumb);
+    const safeTitle = this.escapeHtml(data.title || 'Playlist');
+    const safeTitleAttr = this.escapeAttr(data.title || 'Playlist');
+    const safeUploader = this.escapeHtml(data.uploader || 'Creator');
+    const safeDuration = this.escapeHtml(data.duration_str || 'Various');
 
     // Selection set of video indices
     const selectedIndices = new Set(entries.map((_, i) => i));
@@ -539,14 +574,17 @@ const Components = {
       return entries.map((item, idx) => {
         const isChecked = selectedIndices.has(idx);
         const itemSizeStr = Components.formatBytes(getEntrySize(item.duration));
+        const safeItemTitle = Components.escapeHtml(item.title || '');
+        const safeItemTitleAttr = Components.escapeAttr(item.title || '');
+        const safeItemDuration = Components.escapeHtml(item.duration_str || '00:00');
         return `
           <div class="playlist-video-row ${isChecked ? 'selected' : ''}" data-idx="${idx}">
             <input type="checkbox" class="playlist-chk custom-checkbox" data-idx="${idx}" ${isChecked ? 'checked' : ''} />
             <span class="playlist-item-idx">#${idx + 1}</span>
             <div class="playlist-item-info">
-              <span class="playlist-item-title" title="${item.title}">${item.title}</span>
+              <span class="playlist-item-title" title="${safeItemTitleAttr}">${safeItemTitle}</span>
               <div class="playlist-item-meta">
-                <span>${item.duration_str || '00:00'}</span>
+                <span>${safeItemDuration}</span>
                 <span class="dot">•</span>
                 <span class="playlist-item-size">${itemSizeStr}</span>
               </div>
@@ -559,14 +597,14 @@ const Components = {
     card.innerHTML = `
       <!-- TOP PLAYLIST HEADER -->
       <div class="saveo-playlist-header">
-        ${thumb ? `<img src="${thumb}" alt="thumb" class="saveo-playlist-thumb" />` : `<div class="saveo-playlist-thumb placeholder">PL</div>`}
+        ${thumb ? `<img src="${safeThumb}" referrerpolicy="no-referrer" alt="thumb" class="saveo-playlist-thumb" />` : `<div class="saveo-playlist-thumb placeholder">PL</div>`}
         <div class="saveo-playlist-info">
           <div class="saveo-playlist-badge">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             <span>Playlist • ${count} Videos</span>
           </div>
-          <h3 class="saveo-playlist-title">${data.title || 'Playlist'}</h3>
-          <div class="saveo-playlist-author">Curated by <span>${data.uploader || 'Creator'}</span> • Total duration: ${data.duration_str || 'Various'}</div>
+          <h3 class="saveo-playlist-title" title="${safeTitleAttr}">${safeTitle}</h3>
+          <div class="saveo-playlist-author">Curated by <span>${safeUploader}</span> • Total duration: ${safeDuration}</div>
         </div>
       </div>
 
@@ -735,6 +773,7 @@ const Components = {
       const selectedEntries = entries.filter((_, i) => selectedIndices.has(i));
       let formatId = 'best';
       if (selectedQuality === '2160p' || selectedQuality === '4k') formatId = '2160p';
+      else if (selectedQuality === '1440p') formatId = '1440p';
       else if (selectedQuality === '1080p') formatId = '1080p';
       else if (selectedQuality === '720p') formatId = '720p';
       else if (selectedQuality === '480p') formatId = '480p';
@@ -822,9 +861,9 @@ const Components = {
             <input type="checkbox" class="playlist-chk custom-checkbox" data-idx="${idx}" checked />
             <span class="playlist-item-idx">#${idx + 1}</span>
             <div class="playlist-item-info">
-              <span class="playlist-item-title">${it.title || it.url}</span>
+              <span class="playlist-item-title">${Components.escapeHtml(it.title || it.url || '')}</span>
               <div class="playlist-item-meta">
-                <span>${it.platform || 'Media'}</span>
+                <span>${Components.escapeHtml(it.platform || 'Media')}</span>
               </div>
             </div>
           </div>

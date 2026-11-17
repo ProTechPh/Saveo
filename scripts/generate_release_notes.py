@@ -1,9 +1,10 @@
 import sys
 import os
 import re
+import subprocess
 
 def main():
-    tag = sys.argv[1] if len(sys.argv) > 1 else "v1.4.4"
+    tag = sys.argv[1] if len(sys.argv) > 1 else "v1.4.15"
     ver = tag.lstrip("v")
     
     notes = ""
@@ -12,6 +13,7 @@ def main():
         "CHANGELOG.md",
         os.path.join(os.path.dirname(os.path.dirname(__file__)), "CHANGELOG.md")
     ]
+    content = ""
     for c in candidates:
         if os.path.exists(c):
             with open(c, "r", encoding="utf-8") as f:
@@ -21,7 +23,27 @@ def main():
             if m:
                 notes = m.group(1).strip()
                 break
-    
+    if not notes and content:
+        m = re.search(r"##\s*\[?Unreleased\]?[^\n]*\n(.*?)(?=\n##|\Z)", content, re.DOTALL)
+        if m:
+            notes = m.group(1).strip()
+
+    # Still nothing: summarize recent commits instead of shipping a generic line.
+    if not notes:
+        try:
+            out = subprocess.check_output(
+                ["git", "log", "-15", "--pretty=%s"],
+                text=True, stderr=subprocess.DEVNULL,
+            )
+            subjects = [
+                line.strip() for line in out.splitlines()
+                if line.strip() and not line.lower().startswith(("chore(release)", "merge "))
+            ]
+            if subjects:
+                notes = "\n".join(f"- {s}" for s in subjects)
+        except Exception:
+            pass
+
     if not notes:
         notes = "- **Maintenance & Polish:** Engine and UI stability enhancements."
 

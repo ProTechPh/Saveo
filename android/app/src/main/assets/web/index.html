@@ -2,15 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0c0c0d">
   <title>Saveo</title>
   <meta name="description" content="High-performance, private, local media downloader and stream extractor.">
   <meta name="referrer" content="no-referrer">
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <!-- Favicon and App Icons -->
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="icon" type="image/png" href="assets/icon.png">
@@ -30,7 +26,7 @@
         <div class="brand-text">
           <span class="brand-name">Saveo</span>
         </div>
-        <span class="desktop-pill-badge pill-version" id="header-version-pill">v1.4.4</span>
+        <span class="desktop-pill-badge pill-version" id="header-version-pill">v1.4.15</span>
       </div>
 
       <!-- NAVIGATION TABS (Desktop) -->
@@ -588,7 +584,18 @@
                 </div>
               </div>
 
-              <!-- 5. Theme Selector -->
+              <!-- 5. Filename Template -->
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Filename Template</label>
+                  <span>Use <code>{title}</code> for the media title, e.g. <code>{title} [Saveo]</code>.</span>
+                </div>
+                <div class="setting-control dir-setting-control">
+                  <input type="text" id="setting-filename-template" class="text-input" placeholder="{title}" maxlength="200" />
+                </div>
+              </div>
+
+              <!-- 6. Theme Selector -->
               <div class="setting-item">
                 <div class="setting-info">
                   <label>Application Theme</label>
@@ -738,7 +745,7 @@
           <div class="update-version-card">
             <div class="ver-col">
               <span class="ver-label">INSTALLED VERSION</span>
-              <span class="ver-value" id="update-cur-ver">v1.4.4</span>
+              <span class="ver-value" id="update-cur-ver">v1.4.15</span>
             </div>
             <div class="ver-arrow">➔</div>
             <div class="ver-col">

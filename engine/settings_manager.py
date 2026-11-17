@@ -6,6 +6,7 @@ Persists and manages user configurations in local config storage.
 import json
 import os
 import shutil
+import threading
 from pathlib import Path
 from typing import Dict, Any
 from .file_manager import get_default_download_dir
@@ -23,6 +24,7 @@ class SettingsManager:
         except Exception:
             pass
         self.config_file = self.config_dir / "settings.json"
+        self._lock = threading.RLock()
         self._settings = self._load()
 
     def get_defaults(self) -> Dict[str, Any]:
@@ -31,11 +33,9 @@ class SettingsManager:
             "default_video_quality": "1080p",
             "default_audio_format": "mp3",
             "max_concurrent_downloads": 3,
-            "auto_start_batch": True,
             "theme": "dark",
             "filename_template": "{title}",
             "notifications": True,
-            "auto_open_folder_on_finish": False,
             "cookie_file": "",
             "cookie_browser": "none",
         }
@@ -59,21 +59,32 @@ class SettingsManager:
 
     def _save(self, data: Dict[str, Any]):
         try:
-            with open(self.config_file, "w", encoding="utf-8") as f:
+            tmp_file = self.config_file.with_suffix(".json.tmp")
+            with open(tmp_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
+            os.replace(tmp_file, self.config_file)
         except Exception as e:
             print(f"Error saving settings: {e}")
 
     def get_all(self) -> Dict[str, Any]:
-        return self._settings.copy()
+        with self._lock:
+            return self._settings.copy()
 
     def get(self, key: str, default=None):
-        return self._settings.get(key, default)
+        with self._lock:
+            return self._settings.get(key, default)
 
     def update(self, updates: Dict[str, Any]) -> Dict[str, Any]:
-        self._settings.update(updates)
-        self._save(self._settings)
-        return self._settings.copy()
+        updates = dict(updates or {})
+        if "max_concurrent_downloads" in updates:
+            try:
+                updates["max_concurrent_downloads"] = max(1, min(5, int(updates["max_concurrent_downloads"])))
+            except (TypeError, ValueError):
+                updates.pop("max_concurrent_downloads", None)
+        with self._lock:
+            self._settings.update(updates)
+            self._save(self._settings)
+            return self._settings.copy()
 
 
 settings_manager = SettingsManager()
