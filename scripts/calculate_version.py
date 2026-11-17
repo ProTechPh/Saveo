@@ -38,7 +38,7 @@ def get_highest_version():
         pass
 
     if not candidates:
-        candidates = ["1.4.4"]
+        candidates = ["1.4.15"]
 
     highest = max(candidates, key=parse_semver)
     return parse_semver(highest)

@@ -2,8 +2,64 @@
 
 All notable changes to Saveo will be documented in this file.
 
+## [Unreleased]
+
+- **Download safety & resume:**
+  - Cancelling or failing one download no longer deletes `.part` files belonging to other concurrent downloads.
+  - Pausing now keeps partial files, and resuming continues from the existing `.part` instead of restarting.
+  - Direct-link downloads write to `.part`, resume with HTTP Range, and only replace the final file on completion.
+- **Queue & history reliability:**
+  - Fixed an unlocked queue scan that could silently kill the scheduler thread.
+  - History and settings writes are now serialized and atomic, preventing corrupt JSON under concurrent completions.
+  - Retrying a cancelled/paused task resets pause and progress state correctly.
+- **Library & queue intelligence:**
+  - Duplicate-skip: completed downloads are matched by URL + format + media type, with a “Skip Already Downloaded” setting and a per-download “Download another copy” confirmation. Android uses the same rule against its local history/queue.
+  - Queue state is saved to `~/.saveo/queue.json`; queued/paused downloads survive a restart and interrupted downloads resume from their `.part` file.
+  - Bulk queue actions: Pause All, Resume All, and Retry Failed on desktop.
+  - Library actions: re-download a previous item at its original format, or delete the file from disk (desktop).
+- **Archival options (desktop):**
+  - Subtitles: save available/auto-generated tracks as sidecar subtitle files or embed them, with a configurable language list.
+  - Embed title/author metadata and cover art where FFmpeg supports the container.
+  - Advanced format picker: choose the exact codec, frame rate, HDR, bitrate, and container; video-only streams are paired with the best audio.
+  - Playlist tools: filter long lists by title, shift-click to select a range, select only visible matches, and reverse the download order.
+- **Saveo Labs (new local-first tools):**
+  - **Watchlist / Auto-Capture:** save a channel, playlist, or album and check it hourly; only new items are queued, with max-item and minimum-duration filters.
+  - **Saveo Cast:** a token-protected local RSS podcast feed and M3U playlist for downloaded audio, ready for a local podcast app.
+  - **Chapter clips:** videos with chapters get a picker; download a single chapter as its own named file.
+  - **Provenance Vault:** each completed file gets a `.saveo.json` receipt with source URL, format, and SHA-256; verify from the Library or export a manifest.
+  - **Saveo Beam (experimental):** opt-in LAN page for sending a link from a phone to this PC.
+  - **Transcript search:** search downloaded subtitle sidecars and turn a match into a clip.
+- **Network & input:**
+  - Optional bandwidth limit (KB/s) and parallel-fragment downloads for the desktop engine.
+  - Drag and drop one link into the input, or several links into the batch drawer.
+- **Error handling:**
+  - Bilibili.tv / BiliIntl “registered users” failures now explain that cookies/sign-in are required instead of showing a raw yt-dlp trace.
+  - Permanent failures (auth, private, HTML-page responses) are no longer retried, and raw yt-dlp errors are captured for the UI instead of spamming the console.
+- **Runtime safety:**
+  - Single-instance guard: launching Saveo again focuses the existing window instead of starting a second engine (and a second writer for queue/settings/history).
+  - Off-peak scheduling: queued downloads wait outside a configurable local-time window; active downloads are not interrupted.
+- **Android:**
+  - Downloads run one at a time until per-task pause/cancel tracking lands; the UI no longer claims 5 concurrent streams.
+  - Fixed foreground-service double decrements that could stop the service while another download was active.
+  - Resume now starts the foreground notification and increments the active count correctly.
+- **Security & UI:**
+  - Escaped media titles, uploader names, thumbnails, and playlist/batch rows before inserting them into the DOM.
+  - Toast and release-note text is rendered as text, not raw HTML.
+  - Added a path guard to the open-folder endpoint and a 5 MB cap to the thumbnail proxy.
+  - Removed external Google Fonts from the desktop app (fully local/offline again) and allowed pinch zoom.
+  - Clicking the media title now copies it, as the tooltip promised.
+  - The services pill now reflects real SSE disconnects instead of always showing “Services Online”.
+- **Settings:**
+  - `filename_template` is now applied by both providers and exposed in Settings; removed unused `auto_open_folder_on_finish` and `auto_start_batch` defaults.
+  - Concurrent downloads are clamped to 1–5.
+- **Release hygiene:**
+  - Version strings are synced from `VERSION` during releases; README download links use the `latest` assets.
+  - Added a test workflow and a web→Android asset sync check.
+
 ## [1.4.4]
 
+- **Instagram Reel Duration Detection:**
+  - Reels no longer show `--:--`. When the extractor reports no duration (logged-out Instagram), Saveo now reads it from the media's MP4 `mvhd`/`mehd` headers over a 256 KB range request, so duration and size estimates appear instantly on desktop and Android.
 - **Android Resting Cat & Empty State Proportions:**
   - Applied strict scale constraints to the idle resting cat illustration on Android mobile viewports (`76px × 42px`), preventing fullscreen expansion on high-DPI displays.
   - Centered welcome media instructions with clean, balanced line-height and typography.

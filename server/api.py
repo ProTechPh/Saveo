@@ -8,6 +8,8 @@ import re
 import sys
 import time
 import json
+import socket
+import ipaddress
 import secrets
 import asyncio
 import threading
@@ -15,6 +17,7 @@ import tempfile
 import subprocess
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Dict, Any, List, Optional, Set
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
@@ -96,6 +99,11 @@ from engine.providers.ytdlp_provider import humanize_error
 from engine.settings_manager import settings_manager
 from engine.history_manager import history_manager
 from engine.queue_manager import queue_manager, DownloadTask
+from engine import provenance
+from engine import transcripts
+from engine.watchlist_manager import watchlist_manager
+from .cast import build_feed, build_m3u, media_type_for
+from .beam import beam_server
 from engine.file_manager import (
     open_folder,
     open_in_folder,
@@ -138,7 +146,11 @@ async def lifespan(app: FastAPI):
                 asyncio.run_coroutine_threadsafe(_dispatch_sse_event(data), loop)
 
     queue_manager.add_listener(on_queue_event)
+    watchlist_manager.start_scheduler(queue_manager)
+    beam_server.apply(bool(settings_manager.get("beam_enabled", False)))
     yield
+    watchlist_manager.stop()
+    beam_server.stop()
 
 
 app = FastAPI(title="Saveo API", version="1.0.0", lifespan=lifespan)
@@ -192,18 +204,27 @@ async def security_and_auth_middleware(request: Request, call_next):
     public_paths = (
         "/api/auth/token",
         "/api/system/status-public",
+        "/api/proxy/thumbnail",
         "/docs",
         "/openapi.json",
         "/favicon.ico",
         "/",
     )
     if path.startswith("/api/") and path not in public_paths:
-        token = request.headers.get("x-auth-token") or request.query_params.get("token")
-        if not token or not secrets.compare_digest(token, AUTH_TOKEN):
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"error": "Unauthorized", "detail": "Missing or invalid X-Auth-Token."}
-            )
+        is_public_cast = (
+            path.startswith("/api/cast/feed/")
+            or path.startswith("/api/cast/media/")
+            or path.startswith("/api/cast/m3u/")
+        )
+        if is_public_cast:
+            pass
+        else:
+            token = request.headers.get("x-auth-token") or request.query_params.get("token")
+            if not token or not secrets.compare_digest(token, AUTH_TOKEN):
+                return JSONResponse(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    content={"error": "Unauthorized", "detail": "Missing or invalid X-Auth-Token."}
+                )
 
     response = await call_next(request)
     return response
@@ -318,6 +339,9 @@ class DownloadRequest(BaseModel):
     thumbnail: Optional[str] = Field(None, max_length=2048)
     expected_size_str: Optional[str] = Field(None, max_length=100)
     expected_bytes: Optional[int] = Field(None)
+    start_time: Optional[float] = Field(None, ge=0)
+    end_time: Optional[float] = Field(None, ge=0)
+    force: bool = False
 
 class BatchParseRequest(BaseModel):
     text: str = Field(..., max_length=50000)
@@ -331,16 +355,29 @@ class BatchEnqueueRequest(BaseModel):
     output_dir: Optional[str] = Field(None, max_length=1000)
     playlist_folder: Optional[str] = Field(None, max_length=200)
     items: Optional[List[Dict[str, Any]]] = Field(None, max_length=500)
+    force: bool = False
 
 class PathRequest(BaseModel):
     path: Optional[str] = Field(None, max_length=1000)
 
+
+class WatchlistAddRequest(BaseModel):
+    url: str = Field(..., max_length=2048)
+    quality: str = Field("best", max_length=50)
+    folder: Optional[str] = Field("", max_length=200)
+    max_items: int = Field(10, ge=1, le=50)
+    min_duration: int = Field(0, ge=0, le=86400)
+    max_duration: int = Field(0, ge=0, le=604800)
+    include: Optional[str] = Field("", max_length=120)
+    exclude: Optional[str] = Field("", max_length=120)
+
+
+class WatchlistToggleRequest(BaseModel):
+    enabled: bool
+
 class FileRequest(BaseModel):
     file_path: Optional[str] = Field("", max_length=1000)
     task_id: Optional[str] = Field(None, max_length=100)
-
-class SettingsUpdateRequest(BaseModel):
-    settings: Optional[Dict[str, Any]] = None
 
 
 # ---------------- REST ENDPOINTS ----------------
@@ -367,6 +404,14 @@ async def proxy_thumbnail(url: str):
 
     def _fetch():
         import urllib.request
+        parsed = urlparse(clean_url)
+        if not parsed.hostname:
+            raise ValueError("Invalid thumbnail host")
+        for info in socket.getaddrinfo(parsed.hostname, None):
+            ip = ipaddress.ip_address(info[4][0].split("%", 1)[0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_unspecified:
+                raise ValueError("Thumbnail host is not public")
+
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
             "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
@@ -383,7 +428,9 @@ async def proxy_thumbnail(url: str):
 
         req = urllib.request.Request(clean_url, headers=headers)
         with urllib.request.urlopen(req, timeout=10) as resp:
-            content = resp.read()
+            content = resp.read(5 * 1024 * 1024 + 1)
+            if len(content) > 5 * 1024 * 1024:
+                raise ValueError("Thumbnail too large")
             content_type = resp.headers.get("Content-Type", "image/jpeg")
             return content, content_type
 
@@ -455,6 +502,8 @@ async def analyze_url(req: AnalyzeRequest):
                     "is_audio_only": f.is_audio_only
                 } for f in meta.audio_formats
             ],
+            "advanced_formats": getattr(meta, "advanced_formats", []),
+            "chapters": getattr(meta, "chapters", []),
             "default_download_dir": settings_manager.get("download_dir", get_default_download_dir())
         }
     except Exception as e:
@@ -485,6 +534,11 @@ async def start_download(req: DownloadRequest):
     if not registry.is_valid_url(url):
         raise HTTPException(status_code=400, detail="Invalid URL provided.")
 
+    if settings_manager.get("skip_duplicates", True) and not req.force:
+        duplicate = queue_manager.find_duplicate(url, req.format_label, req.is_audio)
+        if duplicate:
+            return {"duplicate": True, "existing": duplicate}
+
     out_dir = req.output_dir or settings_manager.get("download_dir", get_default_download_dir())
     task = queue_manager.add_task(
         url=url,
@@ -496,7 +550,9 @@ async def start_download(req: DownloadRequest):
         audio_format=req.audio_format,
         output_dir=out_dir,
         expected_size_str=req.expected_size_str or "",
-        expected_bytes=req.expected_bytes or 0
+        expected_bytes=req.expected_bytes or 0,
+        start_time=req.start_time,
+        end_time=req.end_time
     )
     return task.to_dict()
 
@@ -600,8 +656,15 @@ async def batch_enqueue(req: BatchEnqueueRequest):
                 items_map[it["url"]] = it
 
     created_tasks = []
+    skipped = []
     for u in req.urls:
         if registry.is_valid_url(u):
+            if settings_manager.get("skip_duplicates", True) and not req.force:
+                duplicate = queue_manager.find_duplicate(u, req.format_label, req.is_audio)
+                if duplicate:
+                    skipped.append({"url": u, "existing": duplicate})
+                    continue
+
             it_info = items_map.get(u, {})
             title = it_info.get("title", "")
             thumb = it_info.get("thumbnail", "")
@@ -624,11 +687,13 @@ async def batch_enqueue(req: BatchEnqueueRequest):
                 format_label=req.format_label,
                 is_audio=req.is_audio,
                 audio_format=req.audio_format,
-                output_dir=out_dir
+                output_dir=out_dir,
+                persist=False
             )
             created_tasks.append(task.to_dict())
 
-    return {"count": len(created_tasks), "tasks": created_tasks}
+    queue_manager.save_state()
+    return {"count": len(created_tasks), "tasks": created_tasks, "skipped": skipped}
 
 
 @app.get("/api/tasks")
@@ -672,9 +737,146 @@ async def clear_finished():
     return {"success": True}
 
 
+@app.get("/api/watchlist")
+async def get_watchlist():
+    return {"items": watchlist_manager.get_all()}
+
+
+@app.post("/api/watchlist")
+async def add_watchlist(req: WatchlistAddRequest):
+    url = req.url.strip()
+    if not registry.is_valid_url(url):
+        raise HTTPException(status_code=400, detail="Invalid URL provided.")
+    return watchlist_manager.add(
+        url,
+        quality=req.quality,
+        folder=req.folder or "",
+        max_items=req.max_items,
+        min_duration=req.min_duration,
+        max_duration=req.max_duration,
+        include=req.include or "",
+        exclude=req.exclude or "",
+        platform=registry.detect_platform(url),
+    )
+
+
+@app.delete("/api/watchlist/{item_id}")
+async def remove_watchlist(item_id: str):
+    return {"success": watchlist_manager.remove(item_id)}
+
+
+@app.post("/api/watchlist/check-all")
+async def check_all_watchlist():
+    loop = asyncio.get_event_loop()
+    results = await loop.run_in_executor(None, watchlist_manager.check_all, queue_manager)
+    return {"results": results}
+
+
+@app.post("/api/watchlist/{item_id}/check")
+async def check_watchlist_item(item_id: str):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, watchlist_manager.check_one, item_id, queue_manager)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Watchlist item not found.")
+    return result
+
+
+@app.post("/api/watchlist/{item_id}/toggle")
+async def toggle_watchlist_item(item_id: str, req: WatchlistToggleRequest):
+    success = watchlist_manager.set_enabled(item_id, req.enabled)
+    if not success:
+        raise HTTPException(status_code=404, detail="Watchlist item not found.")
+    return {"success": True, "enabled": req.enabled}
+
+
+@app.get("/api/beam/info")
+async def beam_info():
+    return beam_server.info()
+
+
+@app.get("/api/cast/info")
+async def cast_info():
+    token = settings_manager.get("cast_token", "")
+    if not token:
+        token = secrets.token_urlsafe(24)
+        settings_manager.update({"cast_token": token})
+    return {
+        "feed_path": f"/api/cast/feed/{token}.xml",
+        "m3u_path": f"/api/cast/m3u/{token}.m3u",
+    }
+
+
+def _cast_token_valid(token: str) -> bool:
+    expected = settings_manager.get("cast_token", "")
+    return bool(expected) and secrets.compare_digest(str(token), str(expected))
+
+
+@app.get("/api/cast/feed/{token}.xml")
+async def cast_feed(token: str, request: Request):
+    if not _cast_token_valid(token):
+        raise HTTPException(status_code=404, detail="Feed not found.")
+    base_url = str(request.base_url).rstrip("/")
+    xml = build_feed(history_manager.get_all(), base_url, token)
+    return Response(content=xml, media_type="application/rss+xml")
+
+
+@app.get("/api/cast/m3u/{token}.m3u")
+async def cast_m3u(token: str, request: Request):
+    if not _cast_token_valid(token):
+        raise HTTPException(status_code=404, detail="Feed not found.")
+    base_url = str(request.base_url).rstrip("/")
+    return Response(content=build_m3u(history_manager.get_all(), base_url, token), media_type="audio/x-mpegurl")
+
+
+@app.get("/api/cast/media/{token}/{item_id}")
+async def cast_media(token: str, item_id: str):
+    if not _cast_token_valid(token):
+        raise HTTPException(status_code=404, detail="Media not found.")
+    record = next((item for item in history_manager.get_all() if item.get("id") == item_id), None)
+    if not record:
+        raise HTTPException(status_code=404, detail="Media not found.")
+    path = record.get("file_path")
+    if not path or not os.path.isfile(path) or not is_safe_disk_path(path):
+        raise HTTPException(status_code=404, detail="Media not found.")
+    return FileResponse(path, media_type=media_type_for(path), filename=os.path.basename(path))
+
+
 @app.get("/api/history")
 async def get_history():
     return history_manager.get_all()
+
+
+@app.get("/api/transcripts/search")
+async def search_transcripts(q: str = ""):
+    query = (q or "").strip()[:200]
+    if len(query) < 2:
+        return []
+    return transcripts.search_history(history_manager.get_all(), query, limit=50)
+
+
+@app.get("/api/history/{item_id}/verify")
+async def verify_history_item(item_id: str):
+    record = next((item for item in history_manager.get_all() if item.get("id") == item_id), None)
+    if not record:
+        raise HTTPException(status_code=404, detail="History item not found.")
+    path = record.get("file_path")
+    if not path or not is_safe_disk_path(path):
+        raise HTTPException(status_code=403, detail="File is not available for verification.")
+
+    result = provenance.verify_file(path, record.get("sha256", ""))
+    if result["status"] == "unverified":
+        digest = result["actual_sha256"]
+        receipt = provenance.write_sidecar(path, {
+            "source_url": record.get("url", ""),
+            "title": record.get("title", ""),
+            "format_label": record.get("format_label", ""),
+            "file_size": record.get("file_size", 0),
+            "sha256": digest,
+        })
+        history_manager.update_fields(item_id, {"sha256": digest, "provenance_path": receipt})
+        result["expected_sha256"] = digest
+        result["status"] = "verified"
+    return result
 
 
 @app.delete("/api/history/{item_id}")
@@ -698,12 +900,15 @@ async def get_settings():
 async def update_settings_endpoint(req: Dict[str, Any]):
     new_settings = req.get("settings", req) if isinstance(req, dict) else {}
     updated = settings_manager.update(new_settings)
+    beam_server.apply(bool(updated.get("beam_enabled", False)))
     return updated
 
 
 @app.post("/api/open-folder")
 async def api_open_folder(req: PathRequest):
     folder = req.path or settings_manager.get("download_dir", get_default_download_dir())
+    if req.path and not is_safe_disk_path(req.path):
+        raise HTTPException(status_code=403, detail="Path traversal detected: Access denied.")
     success = open_folder(folder)
     return {"success": success, "path": folder}
 
@@ -943,7 +1148,7 @@ async def upload_cookie_content(req: CookieUploadRequest):
     if not content:
         raise HTTPException(status_code=400, detail="Empty cookie content provided.")
 
-    target_dir = Path.home() / ".saveo"
+    target_dir = Path(settings_manager.config_dir)
     target_dir.mkdir(parents=True, exist_ok=True)
     target_file = target_dir / "cookies.txt"
 
@@ -980,7 +1185,7 @@ def _load_app_version():
                         return ver if ver.startswith("v") else f"v{ver}"
             except Exception:
                 pass
-    return "v1.4.4"
+    return "v1.4.16"
 
 
 APP_VERSION = _load_app_version()

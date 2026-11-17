@@ -39,6 +39,8 @@ class MediaMetadata:
     description: str = ""
     formats: List[MediaFormat] = field(default_factory=list)
     audio_formats: List[MediaFormat] = field(default_factory=list)
+    advanced_formats: List[Dict[str, Any]] = field(default_factory=list)
+    chapters: List[Dict[str, Any]] = field(default_factory=list)
     webpage_url: str = ""
     original_url: str = ""
     is_playlist: bool = False
@@ -92,7 +94,9 @@ class BaseProvider(ABC):
         audio_format: str,
         on_progress: Callable[[Dict[str, Any]], None],
         cancel_check: Callable[[], bool],
-        title: str = ""
+        title: str = "",
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None
     ) -> Dict[str, Any]:
         """
         Execute local download.

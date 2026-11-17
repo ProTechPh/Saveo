@@ -38,6 +38,13 @@ def sanitize_filename(name: str, max_length: int = 200) -> str:
     return sanitized
 
 
+def apply_filename_template(template: str, title: str) -> str:
+    """Expand the user filename template. Only {title} is supported today."""
+    tpl = (template or "{title}").strip() or "{title}"
+    name = tpl.replace("{title}", title or "")
+    return sanitize_filename(name, max_length=200)
+
+
 def get_unique_filename(directory: str, filename: str) -> str:
     """
     If filename exists in directory, appends ' (1)', ' (2)' before extension.

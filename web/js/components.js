@@ -47,7 +47,10 @@ const Components = {
       iconSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
     }
 
-    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
+    toast.innerHTML = iconSvg;
+    const textEl = document.createElement('span');
+    textEl.textContent = message;
+    toast.appendChild(textEl);
     container.appendChild(toast);
 
     setTimeout(() => {
@@ -88,13 +91,14 @@ const Components = {
       chip.setAttribute('data-fid', fmt.format_id);
 
       chip.innerHTML = `
-        <span class="chip-label">${fmt.label || fmt.resolution}</span>
-        <span class="chip-size">${fmt.filesize_str || 'Standard'}</span>
+        <span class="chip-label">${this.escapeHtml(fmt.label || fmt.resolution || '')}</span>
+        <span class="chip-size">${this.escapeHtml(fmt.filesize_str || 'Standard')}</span>
       `;
 
       chip.addEventListener('click', () => {
         container.querySelectorAll('.saveo-quality-chip').forEach(c => c.classList.remove('selected'));
         chip.classList.add('selected');
+        document.querySelectorAll('#advanced-formats-list .advanced-format-row').forEach(r => r.classList.remove('selected'));
         const sizeEl = document.getElementById('saveo-estimated-size');
         if (sizeEl) sizeEl.textContent = fmt.filesize_str || 'Standard';
         onSelect(fmt);
@@ -126,8 +130,8 @@ const Components = {
       chip.setAttribute('data-fid', fmt.format_id);
 
       chip.innerHTML = `
-        <span class="chip-label">${fmt.label}</span>
-        <span class="chip-size">${fmt.filesize_str || (fmt.ext ? fmt.ext.toUpperCase() : 'Audio')}</span>
+        <span class="chip-label">${this.escapeHtml(fmt.label || '')}</span>
+        <span class="chip-size">${this.escapeHtml(fmt.filesize_str || (fmt.ext ? fmt.ext.toUpperCase() : 'Audio'))}</span>
       `;
 
       chip.addEventListener('click', () => {
@@ -139,6 +143,148 @@ const Components = {
       });
 
       container.appendChild(chip);
+    });
+  },
+
+  // Render subtitle search results with a one-click clip action.
+  renderTranscriptResults(results, onClip) {
+    const container = document.getElementById('transcript-results');
+    if (!container) return;
+
+    container.innerHTML = '';
+    if (!results || results.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'transcript-empty';
+      empty.textContent = 'No subtitle matches. Download subtitles first, or try another phrase.';
+      container.appendChild(empty);
+      return;
+    }
+
+    results.forEach((result) => {
+      const row = document.createElement('div');
+      row.className = 'transcript-result';
+
+      const time = document.createElement('span');
+      time.className = 'transcript-time';
+      time.textContent = this.formatSeconds(result.start);
+
+      const info = document.createElement('div');
+      info.className = 'transcript-info';
+      const title = document.createElement('div');
+      title.className = 'transcript-title';
+      title.textContent = result.title || 'Downloaded media';
+      const snippet = document.createElement('div');
+      snippet.className = 'transcript-snippet';
+      snippet.textContent = result.text || '';
+      info.appendChild(title);
+      info.appendChild(snippet);
+
+      const clipBtn = document.createElement('button');
+      clipBtn.type = 'button';
+      clipBtn.className = 'secondary-btn btn-sm';
+      clipBtn.textContent = 'Clip';
+      clipBtn.title = 'Download this moment as a clip';
+      clipBtn.addEventListener('click', () => onClip(result));
+
+      row.appendChild(time);
+      row.appendChild(info);
+      row.appendChild(clipBtn);
+      container.appendChild(row);
+    });
+  },
+
+  // Render chapter list for one-shot clip downloads.
+  renderChapters(chapters, onSelect) {
+    const wrap = document.getElementById('chapters-wrap');
+    const list = document.getElementById('chapters-list');
+    const selectedRow = document.getElementById('selected-clip-row');
+    const selectedLabel = document.getElementById('selected-clip-label');
+    const clearBtn = document.getElementById('btn-clear-clip');
+    if (!wrap || !list) return;
+
+    list.innerHTML = '';
+    if (selectedRow) selectedRow.style.display = 'none';
+    if (selectedLabel) selectedLabel.textContent = '';
+
+    const clearSelection = () => {
+      list.querySelectorAll('.chapter-row').forEach(row => row.classList.remove('selected'));
+      if (selectedRow) selectedRow.style.display = 'none';
+      if (selectedLabel) selectedLabel.textContent = '';
+      onSelect(null);
+    };
+    if (clearBtn) clearBtn.onclick = clearSelection;
+
+    if (!chapters || chapters.length === 0) {
+      wrap.style.display = 'none';
+      return;
+    }
+
+    wrap.style.display = 'block';
+    chapters.forEach((chapter, index) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'chapter-row';
+
+      const title = document.createElement('span');
+      title.textContent = chapter.title || `Chapter ${index + 1}`;
+      const time = document.createElement('span');
+      time.className = 'chapter-time';
+      const endLabel = chapter.end_time != null ? this.formatSeconds(chapter.end_time) : 'end';
+      time.textContent = `${this.formatSeconds(chapter.start_time)}–${endLabel}`;
+
+      row.appendChild(title);
+      row.appendChild(time);
+      row.addEventListener('click', () => {
+        list.querySelectorAll('.chapter-row').forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        if (selectedRow) selectedRow.style.display = 'flex';
+        if (selectedLabel) selectedLabel.textContent = `${title.textContent} (${time.textContent})`;
+        onSelect({ ...chapter, title: title.textContent });
+      });
+      list.appendChild(row);
+    });
+  },
+
+  // Render exact source streams for advanced users.
+  renderAdvancedFormats(formats, onSelect) {
+    const wrap = document.getElementById('advanced-formats-wrap');
+    const list = document.getElementById('advanced-formats-list');
+    const count = document.getElementById('advanced-format-count');
+    if (!wrap || !list) return;
+
+    list.innerHTML = '';
+    if (!formats || formats.length === 0) {
+      if (count) count.textContent = '0';
+      wrap.style.display = 'none';
+      return;
+    }
+
+    if (count) count.textContent = formats.length;
+    wrap.style.display = 'block';
+
+    formats.forEach((fmt) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'advanced-format-row';
+      row.setAttribute('data-fid', fmt.format_id);
+
+      const label = document.createElement('span');
+      label.textContent = fmt.label || fmt.format_id;
+      const size = document.createElement('span');
+      size.className = 'af-size';
+      size.textContent = `${fmt.has_audio ? 'muxed' : 'video only'}${fmt.filesize_str ? ` • ${fmt.filesize_str}` : ''}`;
+
+      row.appendChild(label);
+      row.appendChild(size);
+      row.addEventListener('click', () => {
+        list.querySelectorAll('.advanced-format-row').forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        document.querySelectorAll('#video-formats-grid .saveo-quality-chip').forEach(c => c.classList.remove('selected'));
+        const sizeEl = document.getElementById('saveo-estimated-size');
+        if (sizeEl) sizeEl.textContent = fmt.filesize_str || 'Adaptive';
+        onSelect({ ...fmt, advanced: true });
+      });
+      list.appendChild(row);
     });
   },
 
@@ -212,6 +358,11 @@ const Components = {
       thumbSrc = `/api/proxy/thumbnail?url=${encodeURIComponent(thumbSrc)}`;
     }
     const platformIcon = this.getPlatformIcon(task.platform);
+    const safeTitle = this.escapeHtml(task.title || 'Media');
+    const safeTitleAttr = this.escapeAttr(task.title || 'Media');
+    const safePlatform = this.escapeHtml(task.platform || 'Media');
+    const safeThumb = this.escapeAttr(thumbSrc);
+    const safeError = this.escapeHtml(task.error_friendly || '');
 
     let statusClass = task.status || 'queued';
     let statusLabel = task.status || 'Queued';
@@ -225,12 +376,12 @@ const Components = {
 
     card.innerHTML = `
       <div style="position: relative;">
-        ${thumbSrc ? `<img class="queue-item-thumb" referrerpolicy="no-referrer" src="${thumbSrc}" alt="thumb" onerror="if(!this.src.includes('/api/proxy/thumbnail') && '${this.escapeAttr(task.thumbnail || '')}'){this.src='/api/proxy/thumbnail?url=' + encodeURIComponent('${this.escapeAttr(task.thumbnail || '')}');}else{this.style.display='none';}" />` : `<div class="queue-item-thumb" style="display:flex;align-items:center;justify-content:center;font-size:22px;">${platformIcon}</div>`}
+        ${thumbSrc ? `<img class="queue-item-thumb" referrerpolicy="no-referrer" src="${safeThumb}" alt="thumb" />` : `<div class="queue-item-thumb" style="display:flex;align-items:center;justify-content:center;font-size:22px;">${platformIcon}</div>`}
       </div>
       <div class="queue-item-info">
         <div class="queue-item-title-row">
-          <span class="queue-item-title" title="${task.title}">${task.title}</span>
-          <span class="queue-item-platform">${task.platform || 'Media'}</span>
+          <span class="queue-item-title" title="${safeTitleAttr}">${safeTitle}</span>
+          <span class="queue-item-platform">${safePlatform}</span>
           <span class="status-tag ${statusClass}">${statusLabel}</span>
         </div>
         <div class="queue-item-progress-track">
@@ -239,12 +390,23 @@ const Components = {
         <div class="queue-item-meta-row">
           ${metaRowContent}
         </div>
-        ${task.error_friendly ? `<div class="queue-item-error-msg">${task.error_friendly}</div>` : ''}
+        ${task.error_friendly ? `<div class="queue-item-error-msg">${safeError}</div>` : ''}
       </div>
       <div class="queue-item-actions" data-action-key="${this._actionKey(task)}">
         ${actionButtons}
       </div>
     `;
+
+    const thumbEl = card.querySelector('img.queue-item-thumb');
+    if (thumbEl) {
+      thumbEl.addEventListener('error', () => {
+        if (thumbSrc && !thumbEl.src.includes('/api/proxy/thumbnail')) {
+          thumbEl.src = `/api/proxy/thumbnail?url=${encodeURIComponent(thumbSrc)}`;
+        } else {
+          thumbEl.style.display = 'none';
+        }
+      });
+    }
 
     return card;
   },
@@ -263,30 +425,30 @@ const Components = {
   _getQueueItemActions(task) {
     if (task.status === 'downloading' || task.status === 'processing') {
       return `
-        <button class="icon-btn-pause" data-action="pause" data-id="${task.id}" title="Pause">
+        <button class="icon-btn-pause" data-action="pause" data-id="${this.escapeAttr(task.id)}" title="Pause">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>
         </button>
-        <button class="icon-btn-cancel" data-action="cancel" data-id="${task.id}" title="Cancel">
+        <button class="icon-btn-cancel" data-action="cancel" data-id="${this.escapeAttr(task.id)}" title="Cancel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       `;
     } else if (task.status === 'paused') {
       return `
-        <button class="secondary-btn btn-sm" data-action="resume" data-id="${task.id}" title="Resume">
+        <button class="secondary-btn btn-sm" data-action="resume" data-id="${this.escapeAttr(task.id)}" title="Resume">
           <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
           <span>Resume</span>
         </button>
-        <button class="icon-btn" data-action="remove" data-id="${task.id}" title="Remove">
+        <button class="icon-btn" data-action="remove" data-id="${this.escapeAttr(task.id)}" title="Remove">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       `;
     } else if (task.status === 'failed' || task.status === 'cancelled') {
       return `
-        <button class="secondary-btn btn-sm" data-action="retry" data-id="${task.id}" title="Retry">
+        <button class="secondary-btn btn-sm" data-action="retry" data-id="${this.escapeAttr(task.id)}" title="Retry">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 4v6h6"></path><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
           <span>Retry</span>
         </button>
-        <button class="icon-btn" data-action="remove" data-id="${task.id}" title="Remove">
+        <button class="icon-btn" data-action="remove" data-id="${this.escapeAttr(task.id)}" title="Remove">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       `;
@@ -304,7 +466,7 @@ const Components = {
       `;
     } else {
       return `
-        <button class="icon-btn" data-action="remove" data-id="${task.id}" title="Remove">
+        <button class="icon-btn" data-action="remove" data-id="${this.escapeAttr(task.id)}" title="Remove">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       `;
@@ -312,54 +474,61 @@ const Components = {
   },
 
   _getQueueItemMeta(task) {
+    const safeFormat = this.escapeHtml(task.format_label || '');
+    const safeSpeed = this.escapeHtml(task.speed_str || '-- KB/s');
+    const safeDownloaded = this.escapeHtml(task.downloaded_str || '0 B');
+    const safeTotal = this.escapeHtml(task.total_str || '0 B');
+    const safeEta = this.escapeHtml(task.eta_str || '--:--');
+    const safeExpected = this.escapeHtml((task.expected_size_str || '').split('•')[0].trim());
+    const safeSize = this.escapeHtml(task.file_size_str || task.total_str || '');
+
     if (task.status === 'paused') {
       return `
         <span class="meta-warn">Download Paused (${task.percent ? task.percent.toFixed(1) : '0.0'}%)</span>
-        <span class="meta-format">${task.format_label || ''}</span>
+        <span class="meta-format">${safeFormat}</span>
       `;
     }
     if (task.status === 'cancelled') {
       return `
         <span class="meta-warn">Download Cancelled</span>
-        <span class="meta-format">${task.format_label || ''}</span>
+        <span class="meta-format">${safeFormat}</span>
       `;
     }
     if (task.status === 'failed') {
       return `
         <span class="meta-bad">Download Failed</span>
-        <span class="meta-format">${task.format_label || ''}</span>
+        <span class="meta-format">${safeFormat}</span>
       `;
     }
     if (task.status === 'completed') {
       return `
         <span class="meta-good">Completed (100%)</span>
-        <span>${task.file_size_str || task.total_str || ''}</span>
-        <span class="meta-format">${task.format_label || ''}</span>
+        <span>${safeSize}</span>
+        <span class="meta-format">${safeFormat}</span>
       `;
     }
     if (task.status === 'processing') {
       const isAudio = Boolean(task.is_audio);
-      const audioFmt = (task.audio_format || 'audio').toUpperCase();
+      const audioFmt = this.escapeHtml((task.audio_format || 'audio').toUpperCase());
       const encLabel = isAudio ? `Encoding ${audioFmt}` : 'Finishing up...';
-      const targetStr = task.expected_size_str ? ` (~${task.expected_size_str.split('•')[0].trim()})` : '';
+      const targetStr = safeExpected ? ` (~${safeExpected})` : '';
       return `
         <span class="meta-info">${encLabel}${targetStr}</span>
-        <span>${task.eta_str || '--:--'}</span>
-        <span class="meta-format">${task.format_label || ''}</span>
+        <span>${safeEta}</span>
+        <span class="meta-format">${safeFormat}</span>
       `;
     }
     const isAudio = Boolean(task.is_audio);
-    const audioFmt = (task.audio_format || 'audio').toUpperCase();
-    const targetSizeClean = (task.expected_size_str || '').split('•')[0].trim();
-    const targetHint = (isAudio && targetSizeClean && ['MP3', 'WAV'].includes(audioFmt))
-      ? ` • Target: ~${targetSizeClean}`
+    const audioFmt = this.escapeHtml((task.audio_format || 'audio').toUpperCase());
+    const targetHint = (isAudio && safeExpected && ['MP3', 'WAV'].includes((task.audio_format || '').toUpperCase()))
+      ? ` • Target: ~${safeExpected}`
       : '';
     return `
       <span>${task.percent ? task.percent.toFixed(1) : '0.0'}%</span>
-      <span>${task.speed_str || '-- KB/s'}</span>
-      <span>${task.downloaded_str || '0 B'} / ${task.total_str || '0 B'}${targetHint}</span>
-      <span>ETA: ${task.eta_str || '--:--'}</span>
-      <span class="meta-format">${task.format_label || ''}</span>
+      <span>${safeSpeed}</span>
+      <span>${safeDownloaded} / ${safeTotal}${targetHint}</span>
+      <span>ETA: ${safeEta}</span>
+      <span class="meta-format">${safeFormat}</span>
     `;
   },
 
@@ -438,8 +607,14 @@ const Components = {
     const formatLabel = (fmtStr && fmtStr !== 'undefined') ? fmtStr : (isAudio ? 'Audio' : 'Video');
     const sizeStr = item.file_size_str || (item.file_size ? this.formatBytes(item.file_size) : (item.downloaded_bytes ? this.formatBytes(item.downloaded_bytes) : ''));
     const title = String(item.filename || item.title || 'Downloaded Media');
+    const mediaTitle = item.title ? String(item.title) : title;
     const filePath = item.file_path ? String(item.file_path) : '';
     const itemId = String(item.id || '');
+    const sourceUrl = item.url ? String(item.url) : '';
+    const formatId = item.format_id ? String(item.format_id) : (isAudio ? 'bestaudio' : 'best');
+    const audioFormat = item.audio_format ? String(item.audio_format) : 'mp3';
+    const originalThumb = item.thumbnail ? String(item.thumbnail) : '';
+    const canDeleteFile = typeof window === 'undefined' || typeof window.SaveoAndroid === 'undefined';
     const icon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="5" width="19" height="14" rx="2"></rect><path d="M2.5 9h19"></path></svg>';
 
     const safeThumb = this.escapeAttr(thumbSrc);
@@ -451,10 +626,13 @@ const Components = {
     const safeDate = this.escapeHtml(item.created_at_str || '');
     const safePath = this.escapeAttr(filePath);
     const safeId = this.escapeAttr(itemId);
+    const safeUrl = this.escapeAttr(sourceUrl);
+    const safeFormatId = this.escapeAttr(formatId);
+    const safeAudioFormat = this.escapeAttr(audioFormat);
 
     card.innerHTML = `
       <div class="history-thumb-box">
-        ${thumbSrc ? `<img class="history-thumb" referrerpolicy="no-referrer" src="${safeThumb}" alt="thumb" onerror="if(!this.src.includes('/api/proxy/thumbnail') && '${this.escapeAttr(item.thumbnail || '')}'){this.src='/api/proxy/thumbnail?url=' + encodeURIComponent('${this.escapeAttr(item.thumbnail || '')}');}else{this.style.display='none';const fb=this.parentElement.querySelector('.history-thumb-fallback');if(fb)fb.style.display='flex';}" /><div class="history-thumb-fallback" style="display:none;">${icon}</div>` : `<div class="history-thumb-fallback">${icon}</div>`}
+        ${thumbSrc ? `<img class="history-thumb" referrerpolicy="no-referrer" src="${safeThumb}" alt="thumb" /><div class="history-thumb-fallback" style="display:none;">${icon}</div>` : `<div class="history-thumb-fallback">${icon}</div>`}
       </div>
       <div class="history-info">
         <div class="history-filename" title="${safeTitleAttr}">${safeTitle}</div>
@@ -473,11 +651,39 @@ const Components = {
             <span>Open</span>
           </button>
         ` : ''}
-        <button class="icon-btn-trash" data-action="delete-hist" data-id="${safeId}" title="Remove record">
+        ${sourceUrl ? `
+          <button class="icon-btn" data-action="redownload" data-url="${safeUrl}" data-format="${safeFormatId}" data-format-label="${safeFormat}" data-audio="${isAudio ? '1' : '0'}" data-audio-format="${safeAudioFormat}" data-title="${this.escapeAttr(mediaTitle)}" data-thumb="${this.escapeAttr(originalThumb)}" data-start="${item.start_time != null ? this.escapeAttr(item.start_time) : ''}" data-end="${item.end_time != null ? this.escapeAttr(item.end_time) : ''}" title="Download again">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          </button>
+        ` : ''}
+        ${canDeleteFile && filePath ? `
+          <button class="icon-btn-trash" data-action="delete-file" data-id="${safeId}" title="Delete file from disk">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        ` : ''}
+        ${canDeleteFile && filePath ? `
+          <button class="icon-btn" data-action="verify" data-id="${safeId}" title="Verify file integrity">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+          </button>
+        ` : ''}
+        <button class="icon-btn" data-action="delete-hist" data-id="${safeId}" title="Remove record from history">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       </div>
     `;
+
+    const imgEl = card.querySelector('img.history-thumb');
+    if (imgEl) {
+      imgEl.addEventListener('error', () => {
+        if (originalThumb && !imgEl.src.includes('/api/proxy/thumbnail')) {
+          imgEl.src = `/api/proxy/thumbnail?url=${encodeURIComponent(originalThumb)}`;
+        } else {
+          imgEl.style.display = 'none';
+          const fallback = card.querySelector('.history-thumb-fallback');
+          if (fallback) fallback.style.display = 'flex';
+        }
+      });
+    }
 
     return card;
   },
@@ -489,7 +695,16 @@ const Components = {
 
     const entries = data.playlist_entries || [];
     const count = data.playlist_count || entries.length;
-    const thumb = data.thumbnail || (entries[0] && entries[0].thumbnail) || '';
+    let thumb = data.thumbnail || (entries[0] && entries[0].thumbnail) || '';
+    if (thumb.startsWith('//')) thumb = `https:${thumb}`;
+    if (thumb.includes('hdslb.com') || thumb.includes('bilibili.com')) {
+      thumb = `/api/proxy/thumbnail?url=${encodeURIComponent(thumb)}`;
+    }
+    const safeThumb = this.escapeAttr(thumb);
+    const safeTitle = this.escapeHtml(data.title || 'Playlist');
+    const safeTitleAttr = this.escapeAttr(data.title || 'Playlist');
+    const safeUploader = this.escapeHtml(data.uploader || 'Creator');
+    const safeDuration = this.escapeHtml(data.duration_str || 'Various');
 
     // Selection set of video indices
     const selectedIndices = new Set(entries.map((_, i) => i));
@@ -498,6 +713,8 @@ const Components = {
     let selectedQuality = 'best'; // '1080p', '720p', '480p', 'best', 'audio_mp3', 'audio_m4a'
     let isAudio = false;
     let audioFormat = 'mp3';
+    let reverseOrder = false;
+    let lastClickedIdx = null;
 
     // Size estimation helper based on duration and quality bitrate
     const getEntrySize = (durSec) => {
@@ -539,14 +756,17 @@ const Components = {
       return entries.map((item, idx) => {
         const isChecked = selectedIndices.has(idx);
         const itemSizeStr = Components.formatBytes(getEntrySize(item.duration));
+        const safeItemTitle = Components.escapeHtml(item.title || '');
+        const safeItemTitleAttr = Components.escapeAttr(item.title || '');
+        const safeItemDuration = Components.escapeHtml(item.duration_str || '00:00');
         return `
           <div class="playlist-video-row ${isChecked ? 'selected' : ''}" data-idx="${idx}">
             <input type="checkbox" class="playlist-chk custom-checkbox" data-idx="${idx}" ${isChecked ? 'checked' : ''} />
             <span class="playlist-item-idx">#${idx + 1}</span>
             <div class="playlist-item-info">
-              <span class="playlist-item-title" title="${item.title}">${item.title}</span>
+              <span class="playlist-item-title" title="${safeItemTitleAttr}">${safeItemTitle}</span>
               <div class="playlist-item-meta">
-                <span>${item.duration_str || '00:00'}</span>
+                <span>${safeItemDuration}</span>
                 <span class="dot">•</span>
                 <span class="playlist-item-size">${itemSizeStr}</span>
               </div>
@@ -559,14 +779,14 @@ const Components = {
     card.innerHTML = `
       <!-- TOP PLAYLIST HEADER -->
       <div class="saveo-playlist-header">
-        ${thumb ? `<img src="${thumb}" alt="thumb" class="saveo-playlist-thumb" />` : `<div class="saveo-playlist-thumb placeholder">PL</div>`}
+        ${thumb ? `<img src="${safeThumb}" referrerpolicy="no-referrer" alt="thumb" class="saveo-playlist-thumb" />` : `<div class="saveo-playlist-thumb placeholder">PL</div>`}
         <div class="saveo-playlist-info">
           <div class="saveo-playlist-badge">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             <span>Playlist • ${count} Videos</span>
           </div>
-          <h3 class="saveo-playlist-title">${data.title || 'Playlist'}</h3>
-          <div class="saveo-playlist-author">Curated by <span>${data.uploader || 'Creator'}</span> • Total duration: ${data.duration_str || 'Various'}</div>
+          <h3 class="saveo-playlist-title" title="${safeTitleAttr}">${safeTitle}</h3>
+          <div class="saveo-playlist-author">Curated by <span>${safeUploader}</span> • Total duration: ${safeDuration}</div>
         </div>
       </div>
 
@@ -615,12 +835,18 @@ const Components = {
         </div>
       </div>
 
-      <!-- SELECTION CONTROLS HEADER -->
+      <!-- FILTER + SELECTION CONTROLS -->
+      <div class="playlist-filter-wrap">
+        <input type="search" class="text-input" id="playlist-filter-input" placeholder="Filter videos by title..." title="Filter videos; Select All applies to visible rows" autocomplete="off" />
+      </div>
+
       <div class="saveo-selection-bar">
         <div class="saveo-selection-count">
           <span id="playlist-selected-count">${selectedIndices.size}</span> of ${count} videos selected
         </div>
         <div class="saveo-selection-btns">
+          <button class="text-action-btn" id="btn-reverse-order">Reverse order</button>
+          <span class="divider">|</span>
           <button class="text-action-btn" id="btn-select-all">Select All</button>
           <span class="divider">|</span>
           <button class="text-action-btn" id="btn-deselect-all">Deselect All</button>
@@ -687,44 +913,75 @@ const Components = {
       });
     });
 
-    // Checkbox and row click handlers
+    // Filter + selection helpers
+    const filterInput = card.querySelector('#playlist-filter-input');
+    const setRowSelected = (row, selected) => {
+      const idx = parseInt(row.getAttribute('data-idx'), 10);
+      const chk = row.querySelector('.playlist-chk');
+      if (chk) chk.checked = selected;
+      row.classList.toggle('selected', selected);
+      if (selected) selectedIndices.add(idx);
+      else selectedIndices.delete(idx);
+    };
+
+    const applyFilter = () => {
+      const query = (filterInput ? filterInput.value : '').trim().toLowerCase();
+      card.querySelectorAll('.playlist-video-row').forEach(row => {
+        const idx = parseInt(row.getAttribute('data-idx'), 10);
+        const title = String((entries[idx] && entries[idx].title) || '').toLowerCase();
+        row.style.display = (!query || title.includes(query)) ? '' : 'none';
+      });
+    };
+
+    if (filterInput) filterInput.addEventListener('input', applyFilter);
+
+    // Checkbox and row click handlers (Shift = range select)
     const listContainer = card.querySelector('#playlist-videos-container');
     listContainer.addEventListener('click', (e) => {
       const row = e.target.closest('.playlist-video-row');
       if (!row) return;
 
       const idx = parseInt(row.getAttribute('data-idx'), 10);
-      const chk = row.querySelector('.playlist-chk');
+      const willSelect = !selectedIndices.has(idx);
 
-      if (e.target !== chk) {
-        chk.checked = !chk.checked;
-      }
-
-      if (chk.checked) {
-        selectedIndices.add(idx);
-        row.classList.add('selected');
+      if (e.shiftKey && lastClickedIdx !== null) {
+        e.preventDefault();
+        const start = Math.min(lastClickedIdx, idx);
+        const end = Math.max(lastClickedIdx, idx);
+        card.querySelectorAll('.playlist-video-row').forEach(r => {
+          const rIdx = parseInt(r.getAttribute('data-idx'), 10);
+          if (rIdx >= start && rIdx <= end) setRowSelected(r, willSelect);
+        });
       } else {
-        selectedIndices.delete(idx);
-        row.classList.remove('selected');
+        setRowSelected(row, willSelect);
       }
+
+      lastClickedIdx = idx;
       updateSizeAndButton();
     });
 
-    // Select All
+    // Select All (only rows matching the current filter)
     card.querySelector('#btn-select-all').addEventListener('click', () => {
-      entries.forEach((_, i) => selectedIndices.add(i));
-      card.querySelectorAll('.playlist-chk').forEach(c => c.checked = true);
-      card.querySelectorAll('.playlist-video-row').forEach(r => r.classList.add('selected'));
+      card.querySelectorAll('.playlist-video-row').forEach(row => {
+        if (row.style.display !== 'none') setRowSelected(row, true);
+      });
       updateSizeAndButton();
     });
 
     // Deselect All
     card.querySelector('#btn-deselect-all').addEventListener('click', () => {
-      selectedIndices.clear();
-      card.querySelectorAll('.playlist-chk').forEach(c => c.checked = false);
-      card.querySelectorAll('.playlist-video-row').forEach(r => r.classList.remove('selected'));
+      card.querySelectorAll('.playlist-video-row').forEach(row => setRowSelected(row, false));
       updateSizeAndButton();
     });
+
+    // Reverse the download order
+    const reverseBtn = card.querySelector('#btn-reverse-order');
+    if (reverseBtn) {
+      reverseBtn.addEventListener('click', () => {
+        reverseOrder = !reverseOrder;
+        reverseBtn.textContent = reverseOrder ? 'Original order' : 'Reverse order';
+      });
+    }
 
     // Download Button Click
     card.querySelector('#btn-download-playlist-now').addEventListener('click', () => {
@@ -732,9 +989,12 @@ const Components = {
         Components.showToast('Please select at least one video to download.', 'error');
         return;
       }
-      const selectedEntries = entries.filter((_, i) => selectedIndices.has(i));
+      const orderedIndices = Array.from(selectedIndices).sort((a, b) => a - b);
+      if (reverseOrder) orderedIndices.reverse();
+      const selectedEntries = orderedIndices.map(i => entries[i]);
       let formatId = 'best';
       if (selectedQuality === '2160p' || selectedQuality === '4k') formatId = '2160p';
+      else if (selectedQuality === '1440p') formatId = '1440p';
       else if (selectedQuality === '1080p') formatId = '1080p';
       else if (selectedQuality === '720p') formatId = '720p';
       else if (selectedQuality === '480p') formatId = '480p';
@@ -822,9 +1082,9 @@ const Components = {
             <input type="checkbox" class="playlist-chk custom-checkbox" data-idx="${idx}" checked />
             <span class="playlist-item-idx">#${idx + 1}</span>
             <div class="playlist-item-info">
-              <span class="playlist-item-title">${it.title || it.url}</span>
+              <span class="playlist-item-title">${Components.escapeHtml(it.title || it.url || '')}</span>
               <div class="playlist-item-meta">
-                <span>${it.platform || 'Media'}</span>
+                <span>${Components.escapeHtml(it.platform || 'Media')}</span>
               </div>
             </div>
           </div>

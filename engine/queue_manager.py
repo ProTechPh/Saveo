@@ -4,10 +4,12 @@ Coordinates concurrent download jobs, batch queues, status tracking,
 cancellation, retries, and real-time event broadcasts.
 """
 
+import json
 import os
 import time
 import uuid
 import threading
+from pathlib import Path
 from typing import Dict, Any, List, Optional, Callable
 from concurrent.futures import ThreadPoolExecutor
 
@@ -15,6 +17,8 @@ from .providers.registry import registry
 from .settings_manager import settings_manager
 from .history_manager import history_manager
 from .file_manager import format_bytes, get_default_download_dir
+from .schedule import is_allowed_now
+from . import provenance
 
 
 class DownloadPausedException(Exception):
@@ -36,7 +40,9 @@ class DownloadTask:
         output_dir: str = "",
         task_id: str = None,
         expected_size_str: str = "",
-        expected_bytes: int = 0
+        expected_bytes: int = 0,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None
     ):
         self.id = task_id or str(uuid.uuid4())
         self.url = url
@@ -50,6 +56,8 @@ class DownloadTask:
         self.output_dir = output_dir or settings_manager.get("download_dir", get_default_download_dir())
         self.expected_size_str = expected_size_str
         self.expected_bytes = expected_bytes
+        self.start_time = start_time
+        self.end_time = end_time
 
         self.status = "queued" # queued, downloading, processing, completed, failed, cancelled, paused
         self.percent = 0.0
@@ -72,6 +80,7 @@ class DownloadTask:
 
     def cancel(self):
         self._cancelled = True
+        self._paused = False
         self.status = "cancelled"
 
     def is_cancelled(self) -> bool:
@@ -109,6 +118,8 @@ class DownloadTask:
             "total_str": format_bytes(self.total_bytes) if self.total_bytes > 0 else "Unknown",
             "expected_size_str": self.expected_size_str,
             "expected_bytes": self.expected_bytes,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
             "speed_str": self.speed_str,
             "eta_str": self.eta_str,
             "error_friendly": self.error_friendly,
@@ -123,17 +134,111 @@ class DownloadTask:
 
 
 class QueueManager:
-    def __init__(self):
+    PERSISTED_STATUSES = ("queued", "downloading", "processing", "paused")
+
+    def __init__(self, state_file: Optional[str] = None, start_worker: bool = True):
         self.tasks: Dict[str, DownloadTask] = {}
         self.task_order: List[str] = []
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._executor = ThreadPoolExecutor(max_workers=5, thread_name_prefix="saveo_worker")
         self._listeners: List[Callable[[Dict[str, Any]], None]] = []
         self._running = True
+        self.state_file = Path(state_file) if state_file else Path(settings_manager.config_dir) / "queue.json"
+
+        # Restore interrupted / queued tasks before the scheduler starts.
+        self._load_state()
 
         # Background worker loop thread
-        self._worker_thread = threading.Thread(target=self._process_queue_loop, daemon=True)
-        self._worker_thread.start()
+        if start_worker:
+            self._worker_thread = threading.Thread(target=self._process_queue_loop, daemon=True)
+            self._worker_thread.start()
+
+    def _load_state(self):
+        if not self.state_file.exists():
+            return
+        try:
+            with open(self.state_file, "r", encoding="utf-8") as f:
+                items = json.load(f)
+        except Exception as e:
+            print(f"Error loading saved queue: {e}")
+            return
+        if not isinstance(items, list):
+            return
+
+        restored = 0
+        for item in items:
+            if not isinstance(item, dict) or not item.get("url"):
+                continue
+            try:
+                task = DownloadTask(
+                    url=item["url"],
+                    title=item.get("title", ""),
+                    platform=item.get("platform", ""),
+                    thumbnail=item.get("thumbnail", ""),
+                    format_id=item.get("format_id", ""),
+                    format_label=item.get("format_label", "Best Quality"),
+                    is_audio=bool(item.get("is_audio")),
+                    audio_format=item.get("audio_format", "mp3"),
+                    output_dir=item.get("output_dir", ""),
+                    task_id=item.get("id"),
+                    expected_size_str=item.get("expected_size_str", ""),
+                    expected_bytes=int(item.get("expected_bytes") or 0),
+                    start_time=item.get("start_time"),
+                    end_time=item.get("end_time"),
+                )
+                task.created_at = item.get("created_at", time.time())
+                if item.get("status") == "paused":
+                    task.pause()
+                else:
+                    # A download that was running when Saveo closed becomes queued again.
+                    task.status = "queued"
+                self.tasks[task.id] = task
+                self.task_order.append(task.id)
+                restored += 1
+            except Exception:
+                continue
+
+        if restored:
+            print(f"Restored {restored} queued download(s) from {self.state_file}")
+
+    def _save_state(self):
+        try:
+            with self._lock:
+                items = [
+                    self.tasks[tid].to_dict()
+                    for tid in self.task_order
+                    if tid in self.tasks and self.tasks[tid].status in self.PERSISTED_STATUSES
+                ]
+            self.state_file.parent.mkdir(parents=True, exist_ok=True)
+            tmp_file = self.state_file.with_suffix(".json.tmp")
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(items, f, indent=2)
+            os.replace(tmp_file, self.state_file)
+        except Exception as e:
+            print(f"Error saving queue state: {e}")
+
+    def find_duplicate(self, url: str, format_label: str, is_audio: bool) -> Optional[Dict[str, Any]]:
+        """A completed history item or an active queue task for the same URL + format."""
+        if not url:
+            return None
+        done = history_manager.find_duplicate(url, format_label, is_audio)
+        if done:
+            done = dict(done)
+            done["duplicate_source"] = "history"
+            return done
+
+        with self._lock:
+            for task in self.tasks.values():
+                if (
+                    task.url == url
+                    and task.format_label == (format_label or "")
+                    and bool(task.is_audio) == bool(is_audio)
+                    and task.status in self.PERSISTED_STATUSES
+                ):
+                    item = task.to_dict()
+                    item["duplicate_source"] = "queue"
+                    return item
+        return None
 
     def add_listener(self, callback: Callable[[Dict[str, Any]], None]):
         self._listeners.append(callback)
@@ -176,7 +281,10 @@ class QueueManager:
         audio_format: str = "mp3",
         output_dir: str = "",
         expected_size_str: str = "",
-        expected_bytes: int = 0
+        expected_bytes: int = 0,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
+        persist: bool = True
     ) -> DownloadTask:
         with self._lock:
             if not platform:
@@ -195,12 +303,20 @@ class QueueManager:
                 audio_format=audio_format,
                 output_dir=output_dir,
                 expected_size_str=expected_size_str,
-                expected_bytes=expected_bytes
+                expected_bytes=expected_bytes,
+                start_time=start_time,
+                end_time=end_time
             )
             self.tasks[task.id] = task
             self.task_order.insert(0, task.id)
             self._broadcast("task_added", task)
+            if persist:
+                self._save_state()
             return task
+
+    def save_state(self):
+        """Flush the queue after a batch of add_task(..., persist=False) calls."""
+        self._save_state()
 
     def get_task(self, task_id: str) -> Optional[DownloadTask]:
         return self.tasks.get(task_id)
@@ -209,24 +325,13 @@ class QueueManager:
         with self._lock:
             return [self.tasks[tid].to_dict() for tid in self.task_order if tid in self.tasks]
 
-    def _cleanup_partial_files(self, task: DownloadTask):
-        try:
-            if task.output_dir and os.path.isdir(task.output_dir):
-                for fn in os.listdir(task.output_dir):
-                    if fn.endswith('.part') or '.temp' in fn:
-                        fp = os.path.join(task.output_dir, fn)
-                        if os.path.isfile(fp):
-                            os.remove(fp)
-        except Exception:
-            pass
-
     def cancel_task(self, task_id: str) -> bool:
         with self._lock:
             task = self.tasks.get(task_id)
             if task:
                 task.cancel()
-                self._cleanup_partial_files(task)
                 self._broadcast("task_updated", task)
+                self._save_state()
                 return True
         return False
 
@@ -236,6 +341,7 @@ class QueueManager:
             if task and task.status in ("downloading", "processing", "queued"):
                 task.pause()
                 self._broadcast("task_updated", task)
+                self._save_state()
                 return True
         return False
 
@@ -245,6 +351,7 @@ class QueueManager:
             if task and task.status == "paused":
                 task.resume()
                 self._broadcast("task_updated", task)
+                self._save_state()
                 return True
         return False
 
@@ -252,15 +359,19 @@ class QueueManager:
         with self._lock:
             task = self.tasks.get(task_id)
             if task and task.status in ("failed", "cancelled"):
-                self._cleanup_partial_files(task)
                 task.status = "queued"
                 task._cancelled = False
+                task._paused = False
                 task.percent = 0.0
                 task.downloaded_bytes = 0
+                task.total_bytes = 0
+                task.speed_str = "-- KB/s"
+                task.eta_str = "--:--"
                 task.error_friendly = None
                 task.error_suggestion = None
                 task.error_technical = None
                 self._broadcast("task_updated", task)
+                self._save_state()
                 return True
         return False
 
@@ -274,6 +385,7 @@ class QueueManager:
                 if task_id in self.task_order:
                     self.task_order.remove(task_id)
                 self._broadcast("task_removed", task)
+                self._save_state()
                 return True
         return False
 
@@ -284,31 +396,75 @@ class QueueManager:
                 del self.tasks[tid]
                 if tid in self.task_order:
                     self.task_order.remove(tid)
+        self._save_state()
         self._broadcast_event("queue_cleared", {"cleared_count": len(to_remove)})
 
     def _process_queue_loop(self):
         """Monitors queue and submits queued tasks up to max_concurrent_downloads."""
         while self._running:
             time.sleep(0.3)
-            max_concurrent = int(settings_manager.get("max_concurrent_downloads", 3))
+            try:
+                try:
+                    max_concurrent = int(settings_manager.get("max_concurrent_downloads", 3))
+                except (TypeError, ValueError):
+                    max_concurrent = 3
+                max_concurrent = max(1, min(5, max_concurrent))
 
-            active_count = sum(1 for t in self.tasks.values() if t.status in ("downloading", "processing"))
-            if active_count >= max_concurrent:
-                continue
+                if not is_allowed_now(
+                    settings_manager.get("schedule_start", "01:00"),
+                    settings_manager.get("schedule_stop", "07:00"),
+                    bool(settings_manager.get("schedule_enabled", False)),
+                ):
+                    continue
 
-            # Find next queued task
-            task_to_run = None
-            with self._lock:
-                for tid in reversed(self.task_order):
-                    t = self.tasks[tid]
-                    if t.status == "queued":
-                        task_to_run = t
-                        t.status = "downloading"
-                        break
+                with self._lock:
+                    active_count = sum(1 for t in self.tasks.values() if t.status in ("downloading", "processing"))
+                if active_count >= max_concurrent:
+                    continue
 
-            if task_to_run:
-                self._broadcast("task_updated", task_to_run)
-                self._executor.submit(self._execute_task, task_to_run)
+                # Find next queued task
+                task_to_run = None
+                with self._lock:
+                    for tid in reversed(self.task_order):
+                        t = self.tasks.get(tid)
+                        if t and t.status == "queued":
+                            task_to_run = t
+                            t.status = "downloading"
+                            break
+
+                if task_to_run:
+                    self._broadcast("task_updated", task_to_run)
+                    self._executor.submit(self._execute_task, task_to_run)
+            except Exception as e:
+                # Keep the scheduler alive; a dead worker thread silently stops the whole queue.
+                print(f"Queue loop error: {e}")
+                time.sleep(1)
+
+    def _finalize_provenance(self, task: DownloadTask):
+        """Write the hash/receipt off the download thread so large files don't stall the UI."""
+        try:
+            if not task.file_path or not os.path.isfile(task.file_path):
+                return
+            digest = provenance.sha256_file(task.file_path)
+            receipt = provenance.write_sidecar(task.file_path, {
+                "source_url": task.url,
+                "title": task.title,
+                "platform": task.platform,
+                "format_id": task.format_id,
+                "format_label": task.format_label,
+                "audio_format": task.audio_format,
+                "is_audio": task.is_audio,
+                "file_size": task.file_size,
+                "start_time": task.start_time,
+                "end_time": task.end_time,
+                "sha256": digest,
+            })
+            history_manager.update_fields(task.id, {
+                "sha256": digest,
+                "provenance_path": receipt,
+            })
+        except Exception:
+            pass
 
     def _execute_task(self, task: DownloadTask):
         try:
@@ -358,7 +514,9 @@ class QueueManager:
                 audio_format=task.audio_format,
                 on_progress=progress_callback,
                 cancel_check=check_stop,
-                title=task.title
+                title=task.title,
+                start_time=task.start_time,
+                end_time=task.end_time
             )
 
             task.status = "completed"
@@ -381,24 +539,33 @@ class QueueManager:
                 "file_size": task.file_size,
                 "file_size_str": task.file_size_str,
                 "format_label": task.format_label,
+                "format_id": task.format_id,
+                "audio_format": task.audio_format,
+                "start_time": task.start_time,
+                "end_time": task.end_time,
                 "is_audio": task.is_audio,
                 "thumbnail": task.thumbnail,
                 "status": "completed",
             })
+            self._save_state()
+            threading.Thread(target=self._finalize_provenance, args=(task,), daemon=True).start()
 
         except DownloadPausedException:
             task.status = "paused"
             self._broadcast("task_updated", task)
+            self._save_state()
             return
 
         except Exception as e:
             if task.is_paused():
                 task.status = "paused"
                 self._broadcast("task_updated", task)
+                self._save_state()
                 return
             if task.is_cancelled():
                 task.status = "cancelled"
                 self._broadcast("task_updated", task)
+                self._save_state()
                 return
 
             err_str = str(e)
@@ -416,12 +583,12 @@ class QueueManager:
             else:
                 friendly = err_str
 
-            self._cleanup_partial_files(task)
             task.status = "failed"
             task.error_friendly = friendly
             task.error_suggestion = suggestion
             task.error_technical = technical
             self._broadcast("task_failed", task)
+            self._save_state()
 
 
 queue_manager = QueueManager()

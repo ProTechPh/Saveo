@@ -2,15 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0c0c0d">
   <title>Saveo</title>
   <meta name="description" content="High-performance, private, local media downloader and stream extractor.">
   <meta name="referrer" content="no-referrer">
-  <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <!-- Favicon and App Icons -->
   <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="icon" type="image/png" href="assets/icon.png">
@@ -30,7 +26,7 @@
         <div class="brand-text">
           <span class="brand-name">Saveo</span>
         </div>
-        <span class="desktop-pill-badge pill-version" id="header-version-pill">v1.4.4</span>
+        <span class="desktop-pill-badge pill-version" id="header-version-pill">v1.4.16</span>
       </div>
 
       <!-- NAVIGATION TABS (Desktop) -->
@@ -42,6 +38,13 @@
             <line x1="12" y1="15" x2="12" y2="3"></line>
           </svg>
           <span>Downloader</span>
+        </button>
+        <button class="nav-tab" data-tab="watchlist" id="tab-btn-watchlist">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          <span>Watchlist</span>
         </button>
         <button class="nav-tab" data-tab="history" id="tab-btn-history">
           <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -301,6 +304,10 @@
                   <div class="formats-chip-grid saveo-quality-chips-grid" id="video-formats-grid">
                     <!-- Populated dynamically with actual qualities returned by source -->
                   </div>
+                  <details class="advanced-formats" id="advanced-formats-wrap" style="display: none;">
+                    <summary>Advanced formats (<span id="advanced-format-count">0</span>)</summary>
+                    <div class="advanced-formats-list" id="advanced-formats-list"></div>
+                  </details>
                 </div>
 
                 <div class="format-selection-wrap" id="audio-formats-section" style="display: none;">
@@ -309,6 +316,16 @@
                   </div>
                   <div class="formats-chip-grid saveo-quality-chips-grid" id="audio-formats-grid">
                     <!-- Populated dynamically with audio formats -->
+                  </div>
+                </div>
+
+                <!-- CHAPTERS / CLIP -->
+                <div class="chapters-wrap" id="chapters-wrap" style="display: none;">
+                  <label class="section-label">Chapters / Clip</label>
+                  <div class="chapters-list" id="chapters-list"></div>
+                  <div class="selected-clip-row" id="selected-clip-row" style="display: none;">
+                    <span>Clip: <strong id="selected-clip-label"></strong></span>
+                    <button type="button" class="text-link-btn" id="btn-clear-clip">Clear</button>
                   </div>
                 </div>
 
@@ -448,7 +465,14 @@
           <div class="downloader-queue-section" id="downloader-queue-section">
             <div class="recent-downloads-header" id="recent-downloads-header" style="display: none;">
               <h3 class="recent-title">Recent Downloads (<span id="recent-downloads-count">0</span>)</h3>
-              <button class="subtle-link-btn" id="btn-clear-recent-downloads">Clear All</button>
+              <div class="recent-actions">
+                <div class="bulk-queue-actions">
+                  <button class="subtle-link-btn" id="btn-pause-all">Pause All</button>
+                  <button class="subtle-link-btn" id="btn-resume-all">Resume All</button>
+                  <button class="subtle-link-btn" id="btn-retry-failed">Retry Failed</button>
+                </div>
+                <button class="subtle-link-btn" id="btn-clear-recent-downloads">Clear All</button>
+              </div>
             </div>
             <div class="downloader-queue-list" id="downloader-queue-list">
               <div class="downloader-cat-idle">
@@ -457,6 +481,59 @@
             </div>
           </div>
 
+        </div>
+      </section>
+
+
+      <!-- ================= TAB 2: WATCHLIST ================= -->
+      <section class="tab-pane" id="pane-watchlist">
+        <div class="pane-content-single">
+          <div class="input-saveo-card">
+            <div class="saveo-input-bar">
+              <div class="saveo-input-prefix">
+                <svg class="saveo-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </div>
+              <input type="text" id="watch-url-input" class="saveo-input-field" placeholder="Channel, playlist, or album URL..." autocomplete="off" spellcheck="false" />
+              <div class="saveo-bar-actions">
+                <select id="watch-quality" class="custom-select" style="height: 30px; font-size: 12px;">
+                  <option value="best">Best Quality</option>
+                  <option value="2160p">4K 2160p</option>
+                  <option value="1440p">2K 1440p</option>
+                  <option value="1080p">1080p FHD</option>
+                  <option value="720p">720p HD</option>
+                  <option value="480p">480p SD</option>
+                  <option value="audio_mp3">Audio (MP3)</option>
+                  <option value="audio_m4a">Audio (M4A)</option>
+                </select>
+                <button class="saveo-fetch-btn" id="btn-watch-add">Add</button>
+              </div>
+            </div>
+
+            <div class="watchlist-options">
+              <input type="text" id="watch-folder" class="text-input" placeholder="Folder (optional)" maxlength="120" />
+              <input type="number" id="watch-max-items" class="text-input" min="1" max="50" value="10" title="Max new items per check" />
+              <input type="number" id="watch-min-duration" class="text-input" min="0" value="0" title="Skip items shorter than this many seconds" />
+              <input type="text" id="watch-include" class="text-input" placeholder="Title contains (optional)" maxlength="120" />
+              <input type="text" id="watch-exclude" class="text-input" placeholder="Title excludes (optional)" maxlength="120" />
+            </div>
+
+            <div class="saveo-platforms-row">
+              <div class="saveo-platform-chips">
+                <span class="platform-chip">Checked hourly while Saveo is open</span>
+                <span class="platform-chip">Only new items are queued</span>
+                <span class="platform-chip">Duplicate-aware</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="watchlist-toolbar">
+            <h3 class="recent-title">My Watchlist</h3>
+            <button class="subtle-link-btn" id="btn-watch-check-all">Check All</button>
+          </div>
+          <div class="watchlist-list" id="watchlist-items"></div>
         </div>
       </section>
 
@@ -500,6 +577,10 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
                 <span>Open Folder</span>
               </button>
+              <button class="secondary-btn btn-sm" id="btn-export-manifest">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>Export Manifest</span>
+              </button>
               <button class="secondary-btn btn-sm danger" id="btn-hist-clear">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 <span>Clear History</span>
@@ -511,6 +592,18 @@
           <div class="empty-state" id="history-empty-state" style="display: none;">
             <h4>No downloads yet</h4>
             <p>Files you download will be listed here with their size, format and date.</p>
+          </div>
+
+          <!-- TRANSCRIPT SEARCH -->
+          <div class="transcript-search-block">
+            <div class="history-search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="transcript-search-input" placeholder="Search inside downloaded subtitles (.srt / .vtt)..." />
+            </div>
+            <div class="transcript-results" id="transcript-results"></div>
           </div>
 
           <!-- HISTORY ITEMS CONTAINER -->
@@ -588,7 +681,138 @@
                 </div>
               </div>
 
-              <!-- 5. Theme Selector -->
+              <!-- 5. Bandwidth Limit -->
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Bandwidth Limit (KB/s)</label>
+                  <span>0 means unlimited. Useful on metered or shared connections.</span>
+                </div>
+                <div class="setting-control">
+                  <input type="number" id="setting-rate-limit" class="text-input" min="0" step="64" value="0" style="max-width: 140px;" />
+                </div>
+              </div>
+
+              <!-- 6. Parallel Fragments -->
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Parallel Fragments</label>
+                  <span>Extra connections per download (1 = default). Higher can speed up DASH sources but may trigger throttling.</span>
+                </div>
+                <div class="setting-control concurrent-control">
+                  <input type="range" id="setting-fragment-concurrency" min="1" max="8" value="1" class="slider" />
+                  <span class="slider-badge" id="fragment-val-badge">1</span>
+                </div>
+              </div>
+
+              <!-- 7. Off-Peak Scheduling -->
+              <div class="setting-item setting-item-toggle">
+                <div class="setting-info">
+                  <label>Off-Peak Scheduling</label>
+                  <span>Only start queued downloads inside this window. Active downloads are never interrupted.</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-schedule-enabled" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Start Downloads At</label>
+                  <span>24-hour local time. Overnight windows are supported.</span>
+                </div>
+                <div class="setting-control">
+                  <input type="time" id="setting-schedule-start" class="text-input" step="60" style="max-width: 140px;" />
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Stop Starting Downloads At</label>
+                  <span>A download that already started keeps going.</span>
+                </div>
+                <div class="setting-control">
+                  <input type="time" id="setting-schedule-stop" class="text-input" step="60" style="max-width: 140px;" />
+                </div>
+              </div>
+
+              <!-- 8. Filename Template -->
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Filename Template</label>
+                  <span>Use <code>{title}</code> for the media title, e.g. <code>{title} [Saveo]</code>.</span>
+                </div>
+                <div class="setting-control dir-setting-control">
+                  <input type="text" id="setting-filename-template" class="text-input" placeholder="{title}" maxlength="200" />
+                </div>
+              </div>
+
+              <!-- 8. Subtitles -->
+              <div class="setting-item setting-item-toggle">
+                <div class="setting-info">
+                  <label>Download Subtitles</label>
+                  <span>Save available subtitles, including auto-generated tracks when the source provides them.</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-subtitles" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Subtitle Languages</label>
+                  <span>Comma-separated codes, e.g. <code>en, fil</code>, or <code>all</code>.</span>
+                </div>
+                <div class="setting-control dir-setting-control">
+                  <input type="text" id="setting-subtitle-langs" class="text-input" placeholder="en" maxlength="200" />
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Subtitle Handling</label>
+                  <span>Embedding needs FFmpeg; otherwise subtitles are saved next to the video.</span>
+                </div>
+                <div class="setting-control">
+                  <select id="setting-subtitle-mode" class="custom-select">
+                    <option value="sidecar">Save as separate subtitle files</option>
+                    <option value="embed">Embed into the video (FFmpeg)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="setting-item setting-item-toggle">
+                <div class="setting-info">
+                  <label>Embed Metadata</label>
+                  <span>Write title, author, and source tags into the file (FFmpeg).</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-embed-metadata" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-item setting-item-toggle">
+                <div class="setting-info">
+                  <label>Embed Cover Art</label>
+                  <span>Embed the source thumbnail when FFmpeg is available.</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-embed-thumbnail" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- 9. Theme Selector -->
               <div class="setting-item">
                 <div class="setting-info">
                   <label>Application Theme</label>
@@ -617,6 +841,20 @@
                 <div class="setting-control">
                   <label class="toggle-switch">
                     <input type="checkbox" id="setting-notifications" checked />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- 7. Skip Already Downloaded -->
+              <div class="setting-item setting-item-toggle">
+                <div class="setting-info">
+                  <label>Skip Already Downloaded</label>
+                  <span>Don't create another file when the same link was already completed in the same format.</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-skip-duplicates" checked />
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
@@ -667,6 +905,47 @@
                 </button>
               </div>
 
+            </div>
+          </div>
+
+          <!-- SAVEO CAST / LOCAL PODCAST FEED -->
+          <div class="diagnostics-card" id="cast-card">
+            <h3>Saveo Cast — Local Podcast Feed</h3>
+            <p>
+              Subscribe from a podcast app on this PC to the audio in your library. The feed is local and protected by a per-library token.
+            </p>
+            <div class="dir-setting-control" style="margin-top: 8px;">
+              <input type="text" id="cast-feed-url" class="text-input" readonly placeholder="Podcast feed URL" />
+              <button class="secondary-btn" id="btn-copy-cast-feed">Copy</button>
+            </div>
+            <div class="dir-setting-control" style="margin-top: 6px;">
+              <input type="text" id="cast-m3u-url" class="text-input" readonly placeholder="M3U playlist URL" />
+              <button class="secondary-btn" id="btn-copy-cast-m3u">Copy</button>
+            </div>
+          </div>
+
+          <!-- SAVEO BEAM / PHONE HANDOFF -->
+          <div class="diagnostics-card" id="beam-card">
+            <h3>Saveo Beam — Send from Phone</h3>
+            <p>
+              Enable Beam, then open the link below on a phone or tablet connected to the same Wi-Fi. The page queues a link on this PC.
+              Anyone with the link can queue downloads while Beam is enabled.
+            </p>
+            <div class="setting-item setting-item-toggle" style="border-bottom: 0; padding-top: 6px;">
+              <div class="setting-info">
+                <label>Enable Saveo Beam</label>
+                <span>Experimental: starts a small LAN-only page on port 8767.</span>
+              </div>
+              <div class="setting-control">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-beam-enabled" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+            <div class="dir-setting-control" style="margin-top: 4px;">
+              <input type="text" id="beam-url" class="text-input" readonly placeholder="Enable Beam and save preferences to get a link" />
+              <button class="secondary-btn" id="btn-copy-beam">Copy</button>
             </div>
           </div>
 
@@ -738,7 +1017,7 @@
           <div class="update-version-card">
             <div class="ver-col">
               <span class="ver-label">INSTALLED VERSION</span>
-              <span class="ver-value" id="update-cur-ver">v1.4.4</span>
+              <span class="ver-value" id="update-cur-ver">v1.4.16</span>
             </div>
             <div class="ver-arrow">➔</div>
             <div class="ver-col">

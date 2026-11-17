@@ -91,23 +91,11 @@ class SaveoAPI {
     }
   }
 
-  getMobileSettingsSync() {
-    try {
-      let saved = JSON.parse(localStorage.getItem('saveo_mobile_settings') || '{}');
-      if (typeof window.SaveoAndroid !== 'undefined' && window.SaveoAndroid.getSetting) {
-        const raw = window.SaveoAndroid.getSetting("saveo_settings_json", "");
-        if (raw) saved = { ...saved, ...JSON.parse(raw) };
-      }
-      return saved;
-    } catch (e) {
-      return {};
-    }
-  }
-
   processNextMobileQueueItem() {
     if (!this.isNativeMobile()) return;
-    const settings = this.getMobileSettingsSync();
-    const maxConcurrent = Math.min(Math.max(parseInt(settings.max_concurrent_downloads || 3, 10), 1), 5);
+    // The native engine keeps one global pause/cancel flag, so run downloads
+    // sequentially until per-task control lands.
+    const maxConcurrent = 1;
     const queue = this.getMobileQueue();
     const activeDownloading = queue.filter(t => t.status === 'downloading');
 
@@ -207,6 +195,7 @@ class SaveoAPI {
       const completedTask = {
         id: taskId,
         title: title,
+        url: d.url || activeTask.url || '',
         platform: d.platform || activeTask.platform || 'YouTube',
         thumbnail: d.thumbnail || activeTask.thumbnail || '',
         status: 'completed',
@@ -215,6 +204,8 @@ class SaveoAPI {
         file_size: d.file_size || activeTask.total_bytes || activeTask.downloaded_bytes || 0,
         file_size_str: d.file_size_str || activeTask.total_str || activeTask.downloaded_str || '',
         format_label: d.format_label || activeTask.format_label || '',
+        format_id: d.format_id || activeTask.format_id || '',
+        audio_format: d.audio_format || activeTask.audio_format || 'mp3',
         is_audio: Boolean(d.is_audio || activeTask.is_audio),
         percent: 100,
         progress_percent: 100,
@@ -325,6 +316,7 @@ class SaveoAPI {
       };
 
       this.eventSource.onerror = () => {
+        this.emit('sse_disconnected');
         // EventSource will automatically retry with backoff.
         // If connection closed completely (e.g. 401 token issue), refresh token and retry.
         if (this.eventSource && this.eventSource.readyState === EventSource.CLOSED) {
@@ -376,6 +368,7 @@ class SaveoAPI {
         error_friendly: 'Cannot connect to Saveo backend server.',
         error_technical: `Network request to ${url} failed (${netErr.message}). Ensure Saveo.exe is currently running.`
       };
+      this.emit('sse_disconnected');
       throw err;
     }
 
@@ -473,6 +466,29 @@ class SaveoAPI {
   async startDownload(payload) {
     // Native Android Engine
     if (typeof window.SaveoAndroid !== 'undefined') {
+      const settings = await this.getSettings();
+      if (settings.skip_duplicates !== false && !payload.force) {
+        const formatLabel = payload.format_label || '';
+        const isAudio = Boolean(payload.is_audio);
+        const inHistory = this.getMobileHistory().find(h =>
+          h.url && h.url === payload.url &&
+          (h.format_label || '') === formatLabel &&
+          Boolean(h.is_audio) === isAudio
+        );
+        if (inHistory) {
+          return { duplicate: true, existing: { ...inHistory, duplicate_source: 'history' } };
+        }
+        const inQueue = this.getMobileQueue().find(t =>
+          t.url === payload.url &&
+          (t.format_label || '') === formatLabel &&
+          Boolean(t.is_audio) === isAudio &&
+          ['pending', 'queued', 'downloading', 'paused'].includes(t.status)
+        );
+        if (inQueue) {
+          return { duplicate: true, existing: { ...inQueue, duplicate_source: 'queue' } };
+        }
+      }
+
       const taskId = 'native_active';
       this.activeMobileTask = {
         id: taskId,
@@ -481,6 +497,7 @@ class SaveoAPI {
         status: 'downloading',
         percent: 0,
         format_id: payload.format_id || 'best',
+        format_label: payload.format_label || '',
         is_audio: Boolean(payload.is_audio),
         audio_format: payload.audio_format || 'mp3'
       };
@@ -545,7 +562,11 @@ class SaveoAPI {
   async batchEnqueue(payload) {
     if (this.isNativeMobile()) {
       const queue = this.getMobileQueue();
+      const settings = await this.getSettings();
+      const skipDuplicates = settings.skip_duplicates !== false && !payload.force;
+      const history = this.getMobileHistory();
       const newTasks = [];
+      const skipped = [];
       const urls = payload.urls || [];
       const itemsMap = {};
       if (payload.items) {
@@ -553,6 +574,26 @@ class SaveoAPI {
       }
 
       for (const u of urls) {
+        const formatLabel = payload.format_label || 'Best Quality';
+        const isAudio = Boolean(payload.is_audio);
+        if (skipDuplicates) {
+          const inHistory = history.find(h =>
+            h.url && h.url === u &&
+            (h.format_label || '') === formatLabel &&
+            Boolean(h.is_audio) === isAudio
+          );
+          const inQueue = queue.find(t =>
+            t.url === u &&
+            (t.format_label || '') === formatLabel &&
+            Boolean(t.is_audio) === isAudio &&
+            ['pending', 'queued', 'downloading', 'paused'].includes(t.status)
+          );
+          if (inHistory || inQueue) {
+            skipped.push({ url: u });
+            continue;
+          }
+        }
+
         const itemInfo = itemsMap[u] || {};
         const title = itemInfo.title || u.split('?')[0].split('/').pop() || 'Queued Media';
         const task = {
@@ -561,9 +602,9 @@ class SaveoAPI {
           title: title,
           status: 'pending',
           percent: 0,
-          is_audio: Boolean(payload.is_audio),
+          is_audio: isAudio,
           format_id: payload.format_id || 'best',
-          format_label: payload.format_label || 'Best Quality',
+          format_label: formatLabel,
           audio_format: payload.audio_format || 'mp3',
           output_dir: payload.output_dir || 'Downloads/Saveo',
           playlist_folder: itemInfo.playlist_folder || payload.playlist_folder || '',
@@ -580,7 +621,8 @@ class SaveoAPI {
       return {
         count: newTasks.length,
         enqueued: newTasks.length,
-        tasks: newTasks
+        tasks: newTasks,
+        skipped: skipped
       };
     }
 
@@ -713,6 +755,61 @@ class SaveoAPI {
       return { success: true };
     }
     return this.request(`/api/history/${id}?delete_file=${deleteFile}`, { method: 'DELETE' });
+  }
+
+  async verifyHistoryItem(id) {
+    if (this.isNativeMobile()) {
+      return { status: 'unavailable' };
+    }
+    return this.request(`/api/history/${id}/verify`);
+  }
+
+  async searchTranscripts(query) {
+    if (this.isNativeMobile()) {
+      return [];
+    }
+    return this.request(`/api/transcripts/search?q=${encodeURIComponent(query)}`);
+  }
+
+  async getWatchlist() {
+    if (this.isNativeMobile()) return { items: [] };
+    return this.request('/api/watchlist');
+  }  async addWatchlist(payload) {
+    if (this.isNativeMobile()) return null;
+    return this.request('/api/watchlist', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  async removeWatchlist(id) {
+    if (this.isNativeMobile()) return { success: false };
+    return this.request(`/api/watchlist/${id}`, { method: 'DELETE' });
+  }
+
+  async checkWatchlistItem(id) {
+    if (this.isNativeMobile()) return { checked: 0, added: 0, skipped: 0 };
+    return this.request(`/api/watchlist/${id}/check`, { method: 'POST' });
+  }
+
+  async checkAllWatchlist() {
+    if (this.isNativeMobile()) return { results: [] };
+    return this.request('/api/watchlist/check-all', { method: 'POST' });
+  }
+
+  async toggleWatchlistItem(id, enabled) {
+    if (this.isNativeMobile()) return { success: false };
+    return this.request(`/api/watchlist/${id}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled })
+    });
+  }
+
+  async getCastInfo() {
+    if (this.isNativeMobile()) return { feed_path: '', m3u_path: '' };
+    return this.request('/api/cast/info');
+  }
+
+  async getBeamInfo() {
+    if (this.isNativeMobile()) return { enabled: false, url: '' };
+    return this.request('/api/beam/info');
   }
 
   async clearHistory() {
@@ -879,17 +976,17 @@ class SaveoAPI {
         return new Promise((resolve) => {
           const handler = (e) => {
             window.removeEventListener('saveo_update_checked', handler);
-            resolve(e.detail || { app_installed: 'v1.4.4', app_latest: 'v1.4.4', app_up_to_date: true });
+            resolve(e.detail || { app_installed: 'v1.4.16', app_latest: 'v1.4.16', app_up_to_date: true });
           };
           window.addEventListener('saveo_update_checked', handler);
           window.SaveoAndroid.checkUpdates();
           setTimeout(() => {
             window.removeEventListener('saveo_update_checked', handler);
-            resolve({ app_installed: 'v1.4.4', app_latest: 'v1.4.4', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true });
+            resolve({ app_installed: 'v1.4.16', app_latest: 'v1.4.16', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true });
           }, 6000);
         });
       }
-      return { app_installed: 'v1.4.4', app_latest: 'v1.4.4', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true };
+      return { app_installed: 'v1.4.16', app_latest: 'v1.4.16', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true };
     }
     return this.request('/api/system/check-updates');
   }

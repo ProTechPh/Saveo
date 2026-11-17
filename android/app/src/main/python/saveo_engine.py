@@ -9,6 +9,8 @@ import time
 import json
 import re
 import shutil
+import struct
+import urllib.request
 from typing import Dict, Any, Callable, Optional, List, Union
 import yt_dlp
 
@@ -121,6 +123,78 @@ def format_seconds(s: Optional[Union[int, float]]) -> str:
     return f"{h:02d}:{m:02d}:{sec:02d}" if h > 0 else f"{m:02d}:{sec:02d}"
 
 
+def _mp4_duration_seconds(atom_bytes: bytes) -> int:
+    """Reads the duration out of an MP4 'mvhd' atom found in the given bytes."""
+    idx = atom_bytes.find(b'mvhd')
+    if idx < 0:
+        return 0
+    version = atom_bytes[idx + 4] if idx + 5 <= len(atom_bytes) else 0
+    try:
+        if version == 1:
+            timescale, duration = struct.unpack('>IQ', atom_bytes[idx + 24:idx + 36])
+        else:
+            timescale, duration = struct.unpack('>II', atom_bytes[idx + 16:idx + 24])
+    except struct.error:
+        return 0
+    if not timescale:
+        return 0
+    if not duration:
+        # Fragmented MP4 (Instagram DASH): total length lives in mvex/mehd instead
+        idx = atom_bytes.find(b'mehd')
+        if idx < 0:
+            return 0
+        try:
+            if atom_bytes[idx + 4] == 1:
+                duration = struct.unpack('>Q', atom_bytes[idx + 8:idx + 16])[0]
+            else:
+                duration = struct.unpack('>I', atom_bytes[idx + 8:idx + 12])[0]
+        except struct.error:
+            return 0
+    return int(round(duration / timescale)) if duration else 0
+
+
+def _probe_url_duration(url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 15) -> int:
+    """
+    Reads the duration from a media file's container headers over HTTP range requests.
+    Some extractors (Instagram reels) report no duration at all, but the MP4 moov atom has it.
+    shortcut: only MP4/M4A mvhd atoms, extend if other containers need probing.
+    """
+    req_headers = {k: v for k, v in (headers or {}).items() if k.lower() != 'range'}
+    chunk = 262144
+    try:
+        req = urllib.request.Request(url, headers={**req_headers, 'Range': f'bytes=0-{chunk - 1}'})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            head = resp.read(chunk)
+            total = int((resp.headers.get('Content-Range') or '/0').rsplit('/', 1)[-1] or 0)
+        seconds = _mp4_duration_seconds(head)
+        if seconds or total <= len(head):
+            return seconds
+        # moov atom at the end of the file: pull the tail instead
+        req = urllib.request.Request(url, headers={**req_headers, 'Range': f'bytes={max(total - chunk, 0)}-'})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return _mp4_duration_seconds(resp.read(chunk))
+    except Exception:
+        return 0
+
+
+def _has_video_stream(info: Dict[str, Any]) -> bool:
+    if info.get('vcodec') not in (None, '', 'none'):
+        return True
+    return any(f.get('vcodec') not in (None, '', 'none') for f in info.get('formats') or [])
+
+
+def probe_info_duration(info: Dict[str, Any]) -> int:
+    """Recovers a missing duration from the extracted media itself (selected stream, then formats)."""
+    headers = info.get('http_headers')
+    urls = [info.get('url')] + [f.get('url') for f in info.get('formats') or []]
+    for url in urls:
+        if url:
+            seconds = _probe_url_duration(url, headers)
+            if seconds:
+                return seconds
+    return 0
+
+
 def is_playlist_url(url: str) -> bool:
     if not url:
         return False
@@ -230,6 +304,18 @@ def humanize_error(raw_err: str) -> Dict[str, str]:
         return {
             "friendly": "YouTube anti-bot verification challenge triggered.",
             "suggestion": "Place a cookies.txt file into Download/Saveo/cookies.txt to bypass this check.",
+            "technical": str(raw_err)
+        }
+    if "biliintl" in err or "only available for registered users" in err:
+        return {
+            "friendly": "This Bilibili video requires a signed-in account.",
+            "suggestion": "Place a signed-in cookies.txt in Download/Saveo/cookies.txt and try again.",
+            "technical": str(raw_err)
+        }
+    if "extracted extension" in err or "unusual and will be skipped" in err:
+        return {
+            "friendly": "The source returned a web page instead of a media stream.",
+            "suggestion": "Open the page in your browser and use the actual media link, or add cookies.txt.",
             "technical": str(raw_err)
         }
     if "video is unavailable" in err or "unavailable" in err:
@@ -460,6 +546,8 @@ def analyze_url(url: str) -> str:
             # Single Video Extraction (Saveo-style Resolution Tiers)
             raw_formats = info.get("formats", [])
             duration = info.get("duration") or 0
+            if not duration and _has_video_stream(info):
+                duration = probe_info_duration(info)
 
             audio_formats = [f for f in raw_formats if f.get('vcodec') == 'none' and f.get('acodec') != 'none']
             best_audio_size = 0
@@ -680,8 +768,9 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
     Executes download into output_dir and reports progress via callback_obj.
     Automatically places playlist items into a dedicated playlist subfolder if specified.
     """
-    global _is_cancelled
+    global _is_cancelled, _is_paused
     _is_cancelled = False
+    _is_paused = False
 
     if playlist_folder:
         clean_p = sanitize_filename(playlist_folder)
@@ -972,7 +1061,6 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
             }))
         return json.dumps({"status": "paused"})
     except Exception as e:
-        global _is_paused
         if _is_paused or "paused" in str(e).lower():
             if callback_obj:
                 callback_obj.onProgress(json.dumps({
@@ -1003,11 +1091,11 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         })
 
 
-def check_updates(installed_app_version: str = "v1.4.4") -> str:
+def check_updates(installed_app_version: str = "v1.4.16") -> str:
     """
     Checks for updates for Saveo and yt-dlp core.
     """
-    current_app_version = installed_app_version or "v1.4.4"
+    current_app_version = installed_app_version or "v1.4.16"
     if not current_app_version.startswith("v"):
         current_app_version = f"v{current_app_version}"
 

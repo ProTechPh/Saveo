@@ -301,6 +301,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String JSONObjectQuote(String string) {
+        if (string == null) return "\"\"";
         return "\"" + string.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "") + "\"";
     }
 

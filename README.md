@@ -8,7 +8,7 @@
 
 *Download Videos, Reels, Shorts, playlists, albums, and audio from YouTube, Instagram, TikTok, Facebook, Reddit, X, Bilibili, and 1,000+ supported media sites at full quality — with live progress and speed tracking.*
 
-[![Latest Release](https://img.shields.io/badge/Release-v1.4.4-6366f1.svg?style=flat-square)](https://github.com/ProTechPh/Saveo/releases)
+[![Latest Release](https://img.shields.io/github/v/release/ProTechPh/Saveo?style=flat-square&color=6366f1)](https://github.com/ProTechPh/Saveo/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-00d2ff.svg?style=flat-square)](LICENSE)
 [![Website](https://img.shields.io/badge/Website-Live-e5b04a.svg?style=flat-square)](https://protechph.github.io/Saveo/)
 [![Platform: Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20(Stable)-0078d4.svg?style=flat-square&logo=windows)](https://github.com/ProTechPh/Saveo/releases)
@@ -121,6 +121,23 @@ Smart error detection identifies country-level ISP blocks and geo-restrictions, 
 
 ### More built in
 
+- **Duplicate-aware downloads:** Saveo can skip a link that was already completed in the same format, with a one-click “download another copy” override.
+- **Restart-safe queue:** Queued and paused downloads are saved locally and resume from their partial file after relaunch.
+- **Bulk queue controls:** Pause all, resume all, and retry failed downloads from the queue header.
+- **Library actions:** Re-download a previous item in its original format, or delete the file from disk.
+- **Subtitles & tags:** Save subtitle tracks next to the video or embed them, plus title/author metadata and cover art when FFmpeg is available.
+- **Advanced formats:** Pick the exact source stream — codec, frame rate, HDR, bitrate, and container — with video-only streams paired to the best audio.
+- **Playlist tools:** Filter long lists, shift-click a range, select visible matches, and reverse the download order.
+- **Network controls:** Optional bandwidth limit and parallel-fragment downloads for faster or metered connections.
+- **Drag-and-drop links:** Drop one link into the input, or a list of links into the batch drawer.
+- **Single-instance guard:** Opening Saveo again focuses the existing window instead of starting a second engine.
+- **Off-peak scheduling:** Queued downloads can wait for a local-time window while active downloads keep running.
+- **Watchlist:** Save a channel, playlist, or album and let Saveo queue only new items while it runs.
+- **Saveo Cast:** A local, token-protected RSS feed or M3U playlist for downloaded audio, ready for a podcast app.
+- **Chapter clips:** Pick a chapter and download just that segment as its own named file.
+- **Provenance Vault:** Every completed file gets a SHA-256 receipt; verify it from the Library or export a manifest.
+- **Transcript search:** Search downloaded subtitles and turn a match into a clip.
+- **Saveo Beam (experimental):** Send a media link from a phone on the same Wi-Fi to this PC.
 - **In-app updates:** Check for new Saveo releases and view release notes directly inside the application.
 - **Engine maintenance:** Update the embedded yt-dlp core engine from within the application with a single click.
 - **Dynamic version synchronization:** Keeps the displayed application version synchronized with release tags.
@@ -139,10 +156,10 @@ Saveo provides pre-compiled packages for Windows and Android. Development tools 
 
 *The primary Saveo experience, powered by the full Windows download engine.*
 
-| Package | Format | Download (v1.4.4) | Latest Mirror |
+| Package | Format | Download (Latest) | Latest Mirror |
 | :--- | :--- | :--- | :--- |
-| **Saveo Setup** *(Recommended)* | `.exe` Modern Installer | [**Download v1.4.4**](https://github.com/ProTechPh/Saveo/releases/download/v1.4.4/Saveo-Setup.exe) | [Latest Installer Mirror](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Setup.exe) |
-| **Saveo Portable** | Standalone `.zip` | [**Download v1.4.4**](https://github.com/ProTechPh/Saveo/releases/download/v1.4.4/Saveo-Windows-x64.zip) | [Latest ZIP Mirror](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Windows-x64.zip) |
+| **Saveo Setup** *(Recommended)* | `.exe` Modern Installer | [**Download Saveo-Setup.exe**](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Setup.exe) | [Latest Installer Mirror](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Setup.exe) |
+| **Saveo Portable** | Standalone `.zip` | [**Download Saveo-Windows-x64.zip**](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Windows-x64.zip) | [Latest ZIP Mirror](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Windows-x64.zip) |
 
 #### Install or launch
 
@@ -178,7 +195,7 @@ Saveo provides pre-compiled packages for Windows and Android. Development tools 
 
 | Package | Supported Architectures | Direct Package | Releases |
 | :--- | :--- | :--- | :--- |
-| **Saveo for Android** | `arm64-v8a`, `armeabi-v7a`, `x86_64` | [**Download APK (v1.4.4)**](https://github.com/ProTechPh/Saveo/releases/download/v1.4.4/Saveo-Android.apk) | [All Releases](https://github.com/ProTechPh/Saveo/releases) |
+| **Saveo for Android** | `arm64-v8a`, `armeabi-v7a`, `x86_64` | [**Download Saveo-Android.apk**](https://github.com/ProTechPh/Saveo/releases/latest/download/Saveo-Android.apk) | [All Releases](https://github.com/ProTechPh/Saveo/releases) |
 
 #### Installation
 
@@ -359,8 +376,9 @@ Saveo is an open-source utility designed for personal archival, educational, and
 
 ### 🛡️ Security & Privacy Architecture
 
-- **Localhost-Only Binding:** Backend server strictly binds to `127.0.0.1`, ignoring external network interfaces.
-- **Dynamic Authentication Token:** All `/api/*` and WebSocket endpoints require a cryptographic `X-Auth-Token` generated at startup to prevent unauthorized local script or browser tab access.
+- **Localhost-Only Binding:** The main backend server binds to `127.0.0.1`; only the opt-in Saveo Beam page listens on the local network.
+- **Saveo Beam (opt-in):** Disabled by default. When enabled it serves a token-protected page on port 8767 that can only enqueue media links, never read or list files.
+- **Dynamic Authentication Token:** All `/api/*` and WebSocket endpoints require a cryptographic `X-Auth-Token` generated at startup to prevent unauthorized local script or browser tab access. The public `Saveo Cast` feed/media routes use a separate scoped feed token.
 - **Cross-Site Attack Protection:** Requests with external `Origin` headers or `Sec-Fetch-Site: cross-site` are blocked with `403 Forbidden`.
 - **Command Injection Prevention:** File launch and directory inspection calls use `os.startfile()` and token-safe `explorer.exe` process arguments without shell expansion (`shell=False`).
 - **Path Traversal Guards:** Strict containment checks ensure all disk operations and file retrieval requests are confined within user-authorized directories.

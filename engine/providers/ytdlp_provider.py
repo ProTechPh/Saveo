@@ -9,6 +9,8 @@ import re
 import sys
 import time
 import shutil
+import struct
+import urllib.request
 from pathlib import Path
 from typing import List, Dict, Any, Callable, Optional
 from urllib.parse import urlparse
@@ -30,7 +32,13 @@ except ImportError:
 
 
 from .base import BaseProvider, MediaMetadata, MediaFormat, ProviderCapabilities
-from ..file_manager import sanitize_filename, get_unique_filename, format_bytes, format_seconds, resolve_existing_path
+from ..file_manager import (
+    apply_filename_template,
+    get_unique_filename,
+    format_bytes,
+    format_seconds,
+    resolve_existing_path,
+)
 
 
 PLATFORM_PATTERNS = [
@@ -46,10 +54,50 @@ PLATFORM_PATTERNS = [
     (r'dailymotion\.com', 'Dailymotion'),
     (r'pinterest\.com', 'Pinterest'),
     (r'bandcamp\.com', 'Bandcamp'),
-    (r'bilibili\.com', 'Bilibili'),
+    (r'bilibili\.com|bilibili\.tv', 'Bilibili'),
     (r'threads\.net', 'Threads'),
     (r'bluesky\.app|bsky\.app', 'Bluesky'),
 ]
+
+
+class _YtdlpLogger:
+    """Capture yt-dlp logs instead of dumping raw ERROR lines into the console."""
+
+    def __init__(self):
+        self.errors = []
+
+    def debug(self, message):
+        pass
+
+    def info(self, message):
+        pass
+
+    def warning(self, message):
+        pass
+
+    def error(self, message):
+        text = str(message).strip()
+        if text and text not in self.errors:
+            self.errors.append(text)
+            if len(self.errors) > 20:
+                self.errors.pop(0)
+
+
+def _is_transient_error(raw_err: str) -> bool:
+    """Only retry failures that a second attempt can plausibly fix."""
+    err = str(raw_err).lower()
+    permanent_markers = (
+        "registered users", "biliintl", "private video", "sign in", "login",
+        "drm", "protected", "unsupported url", "video is unavailable", "not available",
+        "extracted extension", "unusual and will be skipped",
+    )
+    if any(marker in err for marker in permanent_markers):
+        return False
+    transient_markers = (
+        "403", "429", "timed out", "timeout", "connection", "handshake",
+        "temporarily", "try again", "502", "503", "504", "reset by peer", "unreachable",
+    )
+    return any(marker in err for marker in transient_markers)
 
 
 def humanize_error(raw_err: str) -> Dict[str, str]:
@@ -74,6 +122,18 @@ def humanize_error(raw_err: str) -> Dict[str, str]:
         return {
             "friendly": "YouTube anti-bot verification challenge triggered.",
             "suggestion": "YouTube is challenging automated requests from this network. Add your browser cookies (cookies.txt) in Saveo Settings or place it into ~/.saveo/cookies.txt to bypass this check.",
+            "technical": str(raw_err)
+        }
+    if "biliintl" in err or "only available for registered users" in err:
+        return {
+            "friendly": "This Bilibili video requires a signed-in account.",
+            "suggestion": "Bilibili is refusing anonymous access. Open Saveo Settings and use Browser Session Extraction while signed in, or import a cookies.txt file, then retry this link.",
+            "technical": str(raw_err)
+        }
+    if "extracted extension" in err or "unusual and will be skipped" in err:
+        return {
+            "friendly": "The source returned a web page instead of a downloadable media stream.",
+            "suggestion": "This usually means the link needs a signed-in session or is not the actual media page. Add cookies in Settings, or open the page in your browser and copy the direct media link.",
             "technical": str(raw_err)
         }
     if "video is unavailable" in err or "this video is unavailable" in err or "unavailable" in err:
@@ -124,6 +184,78 @@ def humanize_error(raw_err: str) -> Dict[str, str]:
         "suggestion": "Make sure the URL is accessible and the media is public.",
         "technical": str(raw_err)
     }
+
+
+def _mp4_duration_seconds(atom_bytes: bytes) -> int:
+    """Reads the duration out of an MP4 'mvhd' atom found in the given bytes."""
+    idx = atom_bytes.find(b'mvhd')
+    if idx < 0:
+        return 0
+    version = atom_bytes[idx + 4] if idx + 5 <= len(atom_bytes) else 0
+    try:
+        if version == 1:
+            timescale, duration = struct.unpack('>IQ', atom_bytes[idx + 24:idx + 36])
+        else:
+            timescale, duration = struct.unpack('>II', atom_bytes[idx + 16:idx + 24])
+    except struct.error:
+        return 0
+    if not timescale:
+        return 0
+    if not duration:
+        # Fragmented MP4 (Instagram DASH): total length lives in mvex/mehd instead
+        idx = atom_bytes.find(b'mehd')
+        if idx < 0:
+            return 0
+        try:
+            if atom_bytes[idx + 4] == 1:
+                duration = struct.unpack('>Q', atom_bytes[idx + 8:idx + 16])[0]
+            else:
+                duration = struct.unpack('>I', atom_bytes[idx + 8:idx + 12])[0]
+        except struct.error:
+            return 0
+    return int(round(duration / timescale)) if duration else 0
+
+
+def _probe_url_duration(url: str, headers: Optional[Dict[str, str]] = None, timeout: int = 15) -> int:
+    """
+    Reads the duration from a media file's container headers over HTTP range requests.
+    Some extractors (Instagram reels) report no duration at all, but the MP4 moov atom has it.
+    shortcut: only MP4/M4A mvhd atoms, extend if other containers need probing.
+    """
+    req_headers = {k: v for k, v in (headers or {}).items() if k.lower() != 'range'}
+    chunk = 262144
+    try:
+        req = urllib.request.Request(url, headers={**req_headers, 'Range': f'bytes=0-{chunk - 1}'})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            head = resp.read(chunk)
+            total = int((resp.headers.get('Content-Range') or '/0').rsplit('/', 1)[-1] or 0)
+        seconds = _mp4_duration_seconds(head)
+        if seconds or total <= len(head):
+            return seconds
+        # moov atom at the end of the file: pull the tail instead
+        req = urllib.request.Request(url, headers={**req_headers, 'Range': f'bytes={max(total - chunk, 0)}-'})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return _mp4_duration_seconds(resp.read(chunk))
+    except Exception:
+        return 0
+
+
+def _has_video_stream(info: Dict[str, Any]) -> bool:
+    if info.get('vcodec') not in (None, '', 'none'):
+        return True
+    return any(f.get('vcodec') not in (None, '', 'none') for f in info.get('formats') or [])
+
+
+def probe_info_duration(info: Dict[str, Any]) -> int:
+    """Recovers a missing duration from the extracted media itself (selected stream, then formats)."""
+    headers = info.get('http_headers')
+    urls = [info.get('url')] + [f.get('url') for f in info.get('formats') or []]
+    for url in urls:
+        if url:
+            seconds = _probe_url_duration(url, headers)
+            if seconds:
+                return seconds
+    return 0
 
 
 class YtDlpProvider(BaseProvider):
@@ -275,6 +407,7 @@ class YtDlpProvider(BaseProvider):
         opts: Dict[str, Any] = {
             'quiet': True,
             'no_warnings': True,
+            'logger': _YtdlpLogger(),
             'extract_flat': 'in_playlist' if is_playlist else False,
             'skip_download': True,
             'socket_timeout': 15,
@@ -310,7 +443,8 @@ class YtDlpProvider(BaseProvider):
         last_error = None
         ytdlp_mod = get_yt_dlp()
 
-        # Robust extraction with automatic 1-second retry on transient 403 or handshake stalls
+        # Robust extraction with automatic retry only on transient 403 / handshake stalls
+        logger = opts.get('logger')
         for attempt in range(2):
             try:
                 with ytdlp_mod.YoutubeDL(opts) as ydl:
@@ -319,11 +453,15 @@ class YtDlpProvider(BaseProvider):
                     break
             except Exception as e:
                 last_error = e
-                if attempt == 0:
+                if attempt == 0 and _is_transient_error(str(e)):
                     time.sleep(0.6)
                     continue
+                break
 
         if not info and last_error:
+            raw_error = str(last_error).strip()
+            if not raw_error and logger:
+                raw_error = "\n".join(logger.errors)
             # If single video extraction failed on a playlist URL, try playlist extraction fallback
             if not is_playlist and ("list=" in url or "playlist" in url):
                 try:
@@ -331,10 +469,10 @@ class YtDlpProvider(BaseProvider):
                     with ytdlp_mod.YoutubeDL(p_opts) as p_ydl:
                         info = p_ydl.extract_info(url, download=False)
                 except Exception:
-                    err_dict = humanize_error(str(last_error))
+                    err_dict = humanize_error(raw_error)
                     raise ValueError(f"{err_dict['friendly']}|SPLIT|{err_dict.get('suggestion', '')}|SPLIT|{err_dict['technical']}")
             else:
-                err_dict = humanize_error(str(last_error))
+                err_dict = humanize_error(raw_error)
                 raise ValueError(f"{err_dict['friendly']}|SPLIT|{err_dict.get('suggestion', '')}|SPLIT|{err_dict['technical']}")
 
         if not info:
@@ -411,6 +549,8 @@ class YtDlpProvider(BaseProvider):
         uploader = info.get('uploader') or info.get('channel') or info.get('creator') or "Unknown Creator"
         uploader_url = info.get('uploader_url') or ""
         duration = int(info.get('duration') or 0)
+        if duration <= 0 and _has_video_stream(info):
+            duration = probe_info_duration(info)
         duration_str = format_seconds(duration)
         thumbnail = info.get('thumbnail') or ""
         if thumbnail.startswith("//"):
@@ -422,6 +562,8 @@ class YtDlpProvider(BaseProvider):
         raw_formats = info.get('formats') or []
         parsed_video_formats = self._parse_video_formats(raw_formats, duration)
         parsed_audio_formats = self._parse_audio_formats(raw_formats, duration)
+        advanced_formats = self._parse_advanced_formats(raw_formats)
+        chapters = self._parse_chapters(info)
 
         return MediaMetadata(
             id=str(info.get('id', 'media')),
@@ -436,6 +578,8 @@ class YtDlpProvider(BaseProvider):
             description=description,
             formats=parsed_video_formats,
             audio_formats=parsed_audio_formats,
+            advanced_formats=advanced_formats,
+            chapters=chapters,
             webpage_url=info.get('webpage_url', url),
             original_url=url,
             is_playlist=False,
@@ -492,6 +636,8 @@ class YtDlpProvider(BaseProvider):
             vcodec = f.get('vcodec') or ''
             if vcodec == 'none':
                 continue  # audio only
+            if (f.get('ext') or '').lower() in ('html', 'mhtml'):
+                continue  # web pages are not media streams
             has_any_video = True
             h = f.get('height')
             if not h or not isinstance(h, (int, float)):
@@ -642,6 +788,91 @@ class YtDlpProvider(BaseProvider):
 
         return video_formats
 
+    def _parse_chapters(self, info: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Normalize source chapters for the clip picker."""
+        chapters = []
+        for index, chapter in enumerate(info.get('chapters') or []):
+            try:
+                start = float(chapter.get('start_time'))
+            except (TypeError, ValueError):
+                continue
+            end = chapter.get('end_time')
+            try:
+                end = float(end) if end is not None else None
+            except (TypeError, ValueError):
+                end = None
+            chapters.append({
+                "title": str(chapter.get('title') or f"Chapter {index + 1}"),
+                "start_time": max(0.0, start),
+                "end_time": end,
+            })
+        return chapters
+
+    def _parse_advanced_formats(self, raw_formats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Expose exact video streams (codec, fps, HDR, bitrate, container) for advanced users."""
+        items = []
+        seen = set()
+        for f in raw_formats:
+            format_id = f.get('format_id')
+            if not format_id or format_id in seen:
+                continue
+            vcodec = (f.get('vcodec') or '').lower()
+            if vcodec in ('', 'none'):
+                continue
+            if (f.get('ext') or '').lower() in ('html', 'mhtml'):
+                continue
+            note = str(f.get('format_note') or '')
+            if 'storyboard' in note.lower():
+                continue
+
+            seen.add(format_id)
+            height = int(f.get('height') or 0)
+            width = int(f.get('width') or 0)
+            fps = f.get('fps')
+            ext = (f.get('ext') or '').lower()
+            acodec = (f.get('acodec') or '').lower()
+            has_audio = acodec not in ('', 'none')
+            filesize = int(f.get('filesize') or f.get('filesize_approx') or 0)
+            tbr = f.get('tbr') or f.get('vbr') or 0
+            hdr = str(f.get('dynamic_range') or '')
+            codec_short = vcodec.split('.')[0].upper() if vcodec else ''
+
+            parts = [f"{height}p" if height else "Video"]
+            if fps:
+                parts.append(f"{int(round(fps))}fps")
+            if hdr and hdr.upper() != 'SDR':
+                parts.append(hdr.upper())
+            if codec_short:
+                parts.append(codec_short)
+            if ext:
+                parts.append(ext.upper())
+            if tbr:
+                parts.append(f"{int(round(tbr))}kbps")
+            label = " • ".join(parts)
+
+            items.append({
+                "format_id": str(format_id),
+                "ext": ext,
+                "height": height,
+                "width": width,
+                "resolution": f"{width}x{height}" if width and height else (f"{height}p" if height else "Video"),
+                "label": label,
+                "filesize_approx": filesize,
+                "filesize_str": format_bytes(filesize) if filesize > 0 else "Adaptive",
+                "has_video": True,
+                "has_audio": has_audio,
+                "is_audio_only": False,
+                "fps": fps,
+                "vcodec": vcodec,
+                "acodec": acodec,
+                "tbr": round(float(tbr), 1) if tbr else 0,
+                "hdr": hdr,
+                "note": note,
+            })
+
+        items.sort(key=lambda item: (item["height"], item.get("fps") or 0, item.get("tbr") or 0), reverse=True)
+        return items[:60]
+
     def _parse_audio_formats(self, raw_formats: List[Dict[str, Any]], duration: int) -> List[MediaFormat]:
         """
         Creates audio download format options: MP3, M4A, WAV, Opus.
@@ -761,13 +992,32 @@ class YtDlpProvider(BaseProvider):
         audio_format: str,
         on_progress: Callable[[Dict[str, Any]], None],
         cancel_check: Callable[[], bool],
-        title: str = ""
+        title: str = "",
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None
     ) -> Dict[str, Any]:
         os.makedirs(output_dir, exist_ok=True)
         final_file_info = {}
         target_codec = audio_format.lower() if audio_format else "mp3"
 
+        # Files written by this task only. Never sweep the whole output folder:
+        # concurrent downloads keep their own .part files there.
+        task_files = set()
+
+        def cleanup_task_files():
+            for path in list(task_files):
+                for candidate in (path, f"{path}.part"):
+                    try:
+                        if candidate and os.path.isfile(candidate):
+                            os.remove(candidate)
+                    except Exception:
+                        pass
+
         def ytdl_hook(d):
+            for p in (d.get('filename'), d.get('tmpfilename')):
+                if p:
+                    task_files.add(p)
+
             if cancel_check():
                 raise Exception("Download cancelled by user.")
 
@@ -814,9 +1064,10 @@ class YtDlpProvider(BaseProvider):
 
         # Determine target extension and unique filename to prevent yt-dlp skipping duplicate downloads
         target_ext = f".{audio_format.lower() if audio_format else 'mp3'}" if is_audio else ".mp4"
-        clean_title = sanitize_filename(title.strip() if title else "", max_length=150) if title else ""
+        raw_title = title.strip() if title else ""
+        clean_title = apply_filename_template(filename_template, raw_title) if raw_title else ""
         chosen_stem = ""
-        if clean_title and clean_title.lower() not in ("analyzing...", "web media", "unknown"):
+        if clean_title and raw_title.lower() not in ("analyzing...", "web media", "unknown"):
             candidate = f"{clean_title}{target_ext}"
             unique_name = get_unique_filename(output_dir, candidate)
             chosen_stem = Path(unique_name).stem
@@ -831,6 +1082,7 @@ class YtDlpProvider(BaseProvider):
             'outtmpl': outtmpl,
             'quiet': True,
             'no_warnings': True,
+            'logger': _YtdlpLogger(),
             'noplaylist': True,
             'socket_timeout': 15,
             'retries': 5,
@@ -838,7 +1090,7 @@ class YtDlpProvider(BaseProvider):
             'extractor_retries': 5,
             'file_access_retries': 3,
             'overwrites': True,        # CRITICAL: Always overwrite target stem so yt-dlp never skips download
-            'continuedl': False,
+            'continuedl': True,        # Resume the .part left by a paused download (same stem)
             'progress_hooks': [ytdl_hook],
             'postprocessor_hooks': [ytdl_postprocessor_hook],
             'restrictfilenames': False,
@@ -851,6 +1103,26 @@ class YtDlpProvider(BaseProvider):
         if sys.platform == 'win32':
             ydl_opts['windowsfilenames'] = True
 
+        # Optional network shaping (desktop only; Android uses the embedded engine defaults).
+        try:
+            from ..settings_manager import settings_manager
+            try:
+                rate_kbps = int(settings_manager.get("rate_limit_kbps", 0) or 0)
+            except (TypeError, ValueError):
+                rate_kbps = 0
+            if rate_kbps > 0:
+                ydl_opts['ratelimit'] = rate_kbps * 1024
+
+            try:
+                fragments = int(settings_manager.get("fragment_concurrency", 1) or 1)
+            except (TypeError, ValueError):
+                fragments = 1
+            fragments = max(1, min(8, fragments))
+            if fragments > 1:
+                ydl_opts['concurrent_fragment_downloads'] = fragments
+        except Exception:
+            pass
+
         cookie_file = self._locate_cookie_file()
         if cookie_file:
             ydl_opts['cookiefile'] = cookie_file
@@ -862,6 +1134,16 @@ class YtDlpProvider(BaseProvider):
         has_ffmpeg = bool(self.ffmpeg_path and os.path.exists(self.ffmpeg_path))
         if has_ffmpeg:
             ydl_opts['ffmpeg_location'] = self.ffmpeg_path
+
+        if start_time is not None or end_time is not None:
+            if not has_ffmpeg:
+                raise Exception("Chapter clips require FFmpeg to be available.")
+            clip_start = max(0.0, float(start_time or 0.0))
+            clip_end = float(end_time) if end_time is not None else None
+            ydl_opts['download_ranges'] = lambda info_dict, ydl: [
+                (clip_start, clip_end if clip_end is not None else info_dict.get('duration'))
+            ]
+            ydl_opts['force_keyframes_at_cuts'] = True
 
         if is_audio:
             target_codec = audio_format.lower() if audio_format else "mp3"
@@ -922,23 +1204,60 @@ class YtDlpProvider(BaseProvider):
                 else:
                     ydl_opts['format'] = f"{format_id}/best[ext=mp4]/best/bestvideo+bestaudio"
 
+        # Optional subtitles / metadata / cover art (desktop engine).
+        subs_enabled = False
+        subs_mode = "sidecar"
+        subtitle_langs = ["en"]
+        embed_metadata = False
+        embed_thumbnail = False
+        try:
+            from ..settings_manager import settings_manager
+            subs_enabled = bool(settings_manager.get("subtitles_enabled", False))
+            subs_mode = str(settings_manager.get("subtitle_mode", "sidecar") or "sidecar")
+            raw_langs = str(settings_manager.get("subtitle_langs", "en") or "en")
+            parsed_langs = [part for part in re.split(r"[,\s]+", raw_langs) if part][:20]
+            subtitle_langs = parsed_langs or ["en"]
+            embed_metadata = bool(settings_manager.get("embed_metadata", False))
+            embed_thumbnail = bool(settings_manager.get("embed_thumbnail", False))
+        except Exception:
+            pass
+
+        if not is_audio and subs_enabled:
+            ydl_opts['writesubtitles'] = True
+            ydl_opts['writeautomaticsub'] = True
+            ydl_opts['subtitleslangs'] = subtitle_langs
+            if has_ffmpeg:
+                ydl_opts['subtitlesformat'] = 'srt/vtt/best'
+
+        extra_postprocessors = []
+        if has_ffmpeg:
+            if (not is_audio) and subs_enabled and subs_mode == 'embed':
+                extra_postprocessors.append({'key': 'FFmpegEmbedSubtitle'})
+            if embed_metadata:
+                extra_postprocessors.append({'key': 'FFmpegMetadata'})
+            if embed_thumbnail and (not is_audio or target_codec in ("mp3", "m4a", "opus", "aac")):
+                ydl_opts['writethumbnail'] = True
+                extra_postprocessors.append({'key': 'EmbedThumbnail'})
+        if extra_postprocessors:
+            ydl_opts.setdefault('postprocessors', []).extend(extra_postprocessors)
+
         ytdlp_mod = get_yt_dlp()
         try:
             with ytdlp_mod.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
         except Exception as e:
-            # Clean up partial files from aborted or errored download
+            # A pause raises from cancel_check: keep this task's .part files for resume.
             try:
-                for fn in os.listdir(output_dir):
-                    if fn.endswith('.part') or '.temp' in fn:
-                        fp = os.path.join(output_dir, fn)
-                        if os.path.isfile(fp):
-                            os.remove(fp)
+                cancelled = cancel_check()
             except Exception:
-                pass
-            if cancel_check():
+                raise
+            # Cancel or hard failure: remove only the files this task touched.
+            cleanup_task_files()
+            if cancelled:
                 raise Exception("Download cancelled by user.")
-            err_dict = humanize_error(str(e))
+            logger = ydl_opts.get('logger')
+            raw_error = str(e).strip() or ("\n".join(logger.errors) if logger else "")
+            err_dict = humanize_error(raw_error)
             raise ValueError(f"{err_dict['friendly']}|SPLIT|{err_dict.get('suggestion', '')}|SPLIT|{err_dict['technical']}")
 
         # Determine output file path
@@ -974,10 +1293,14 @@ class YtDlpProvider(BaseProvider):
                 saved_file = resolve_existing_path(final_file_info['finished_path'])
 
         if not saved_file or not os.path.exists(saved_file):
-            # Scan directory for the most recently modified file in output_dir
-            files = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if not f.endswith('.part')]
-            if files:
-                saved_file = max(files, key=os.path.getmtime)
+            # Scan the output folder, preferring files that belong to this task's stem.
+            candidates = [os.path.join(output_dir, f) for f in os.listdir(output_dir) if not f.endswith('.part')]
+            if chosen_stem:
+                own_files = [f for f in candidates if os.path.basename(f).startswith(chosen_stem)]
+                if own_files:
+                    candidates = own_files
+            if candidates:
+                saved_file = max(candidates, key=os.path.getmtime)
 
         if not saved_file or not os.path.exists(saved_file):
             raise Exception("Download completed but destination file could not be located.")

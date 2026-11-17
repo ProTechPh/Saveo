@@ -8,8 +8,15 @@ import os
 import sys
 import shutil
 import tempfile
+import atexit
 import unittest
 from pathlib import Path
+
+# Keep queue/settings/history writes out of the developer's real ~/.saveo.
+_TEST_HOME = tempfile.mkdtemp(prefix="saveo-test-home-")
+os.environ["HOME"] = _TEST_HOME
+os.environ["USERPROFILE"] = _TEST_HOME
+atexit.register(shutil.rmtree, _TEST_HOME, True)
 
 # Add project root to sys.path
 root_dir = Path(__file__).resolve().parent.parent
@@ -27,6 +34,10 @@ class TestRealDownload(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
+    @unittest.skipUnless(
+        os.environ.get("SAVEO_NETWORK_TESTS") == "1",
+        "network test: set SAVEO_NETWORK_TESTS=1 to run",
+    )
     def test_direct_provider_real_download(self):
         sample_url = "https://filesamples.com/samples/video/mp4/sample_640x360.mp4"
         provider = registry.get_provider_for_url(sample_url)

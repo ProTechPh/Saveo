@@ -9,9 +9,11 @@ class SaveoApp {
     this.currentMedia = null;
     this.selectedMode = 'video'; // 'video' or 'audio'
     this.selectedFormat = null;
+    this.selectedClip = null;
     this.activeSingleTaskId = null;
     this.tasks = [];
     this.settings = {};
+    this.watchlistItems = [];
 
     this.init();
   }
@@ -19,6 +21,7 @@ class SaveoApp {
   async init() {
     try { this.setupTabs(); } catch (e) { console.error("Setup tabs error:", e); }
     try { this.setupDownloader(); } catch (e) { console.error("Setup downloader error:", e); }
+    try { this.setupWatchlist(); } catch (e) { console.error("Setup watchlist error:", e); }
     try { this.setupHistory(); } catch (e) { console.error("Setup history error:", e); }
     try { this.setupSettings(); } catch (e) { console.error("Setup settings error:", e); }
     try { this.setupUpdateSystem(); } catch (e) { console.error("Setup update system error:", e); }
@@ -26,6 +29,8 @@ class SaveoApp {
 
     // Load initial data safely
     try { await this.loadSettings(); } catch (e) { console.error("Error loading settings:", e); }
+    try { await this.setupCast(); } catch (e) { console.error("Error loading cast info:", e); }
+    try { await this.loadBeamInfo(); } catch (e) { console.error("Error loading beam info:", e); }
     try { await this.loadSystemStatus(); } catch (e) { console.error("Error loading system status:", e); }
     try { await this.loadTasks(); } catch (e) { console.error("Error loading tasks:", e); }
     try { await this.loadHistory(); } catch (e) { console.error("Error loading history:", e); }
@@ -119,6 +124,8 @@ class SaveoApp {
 
     if (tabName === 'history') {
       this.loadHistory();
+    } else if (tabName === 'watchlist') {
+      this.loadWatchlist();
     } else if (tabName === 'settings') {
       this.loadSettings();
     }
@@ -148,6 +155,249 @@ class SaveoApp {
         <span class="btn-text">Analyze</span>
       `;
     }
+  }
+
+  // ================= SAVEO CAST =================
+  async setupCast() {
+    const card = document.getElementById('cast-card');
+    if (!card) return;
+    if (typeof window.SaveoAndroid !== 'undefined') {
+      card.style.display = 'none';
+      return;
+    }
+    try {
+      const info = await api.getCastInfo();
+      const feedInput = document.getElementById('cast-feed-url');
+      const m3uInput = document.getElementById('cast-m3u-url');
+      const origin = window.location.origin;
+      const feedUrl = info && info.feed_path ? `${origin}${info.feed_path}` : '';
+      const m3uUrl = info && info.m3u_path ? `${origin}${info.m3u_path}` : '';
+      if (!feedUrl) {
+        card.style.display = 'none';
+        return;
+      }
+      if (feedInput) feedInput.value = feedUrl;
+      if (m3uInput) m3uInput.value = m3uUrl;
+
+      const copy = (value, label) => {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) {
+          Components.showToast('Clipboard is unavailable.', 'error');
+          return;
+        }
+        navigator.clipboard.writeText(value).then(
+          () => Components.showToast(`${label} copied.`, 'success'),
+          () => Components.showToast('Could not copy.', 'error')
+        );
+      };
+      const btnFeed = document.getElementById('btn-copy-cast-feed');
+      if (btnFeed) btnFeed.addEventListener('click', () => copy(feedUrl, 'Podcast feed URL'));
+      const btnM3u = document.getElementById('btn-copy-cast-m3u');
+      if (btnM3u) btnM3u.addEventListener('click', () => copy(m3uUrl, 'M3U URL'));
+    } catch (e) {
+      card.style.display = 'none';
+    }
+  }
+
+  // ================= SAVEO BEAM =================
+  async loadBeamInfo() {
+    const card = document.getElementById('beam-card');
+    const input = document.getElementById('beam-url');
+    if (!card || !input) return;
+    if (typeof window.SaveoAndroid !== 'undefined') {
+      card.style.display = 'none';
+      return;
+    }
+    try {
+      const info = await api.getBeamInfo();
+      const url = info && info.url ? info.url : '';
+      input.value = url;
+      const wanted = document.getElementById('setting-beam-enabled')
+        ? document.getElementById('setting-beam-enabled').checked
+        : Boolean(this.settings.beam_enabled);
+      input.placeholder = url
+        ? ''
+        : (wanted ? 'Beam could not start (is port 8767 in use?)' : 'Enable Beam and save preferences to get a link');
+      const btn = document.getElementById('btn-copy-beam');
+      if (btn) {
+        btn.onclick = () => {
+          if (!url) {
+            Components.showToast('Beam is not running.', 'info');
+            return;
+          }
+          if (!navigator.clipboard || !navigator.clipboard.writeText) {
+            Components.showToast('Clipboard is unavailable.', 'error');
+            return;
+          }
+          navigator.clipboard.writeText(url).then(
+            () => Components.showToast('Beam link copied.', 'success'),
+            () => Components.showToast('Could not copy.', 'error')
+          );
+        };
+      }
+    } catch (e) {
+      input.value = '';
+    }
+  }
+
+  // ================= WATCHLIST =================
+  setupWatchlist() {
+    const urlInput = document.getElementById('watch-url-input');
+    const btnAdd = document.getElementById('btn-watch-add');
+    const btnCheckAll = document.getElementById('btn-watch-check-all');
+    const list = document.getElementById('watchlist-items');
+
+    const addWatch = async () => {
+      const url = (urlInput ? urlInput.value : '').trim();
+      if (!url) {
+        Components.showToast('Paste a channel, playlist, or album URL first.', 'error');
+        if (urlInput) urlInput.focus();
+        return;
+      }
+      const payload = {
+        url,
+        quality: document.getElementById('watch-quality')?.value || 'best',
+        folder: (document.getElementById('watch-folder')?.value || '').trim(),
+        max_items: parseInt(document.getElementById('watch-max-items')?.value, 10) || 10,
+        min_duration: parseInt(document.getElementById('watch-min-duration')?.value, 10) || 0,
+        include: (document.getElementById('watch-include')?.value || '').trim(),
+        exclude: (document.getElementById('watch-exclude')?.value || '').trim()
+      };
+      try {
+        await api.addWatchlist(payload);
+        if (urlInput) urlInput.value = '';
+        await this.loadWatchlist();
+        Components.showToast('Added to watchlist.', 'success');
+      } catch (e) {
+        Components.showToast(`Could not add watch: ${e.message}`, 'error');
+      }
+    };
+
+    if (btnAdd) btnAdd.addEventListener('click', addWatch);
+    if (urlInput) {
+      urlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addWatch();
+        }
+      });
+    }
+
+    if (btnCheckAll) {
+      btnCheckAll.addEventListener('click', async () => {
+        Components.showToast('Checking watchlist...', 'info');
+        try {
+          const res = await api.checkAllWatchlist();
+          const results = (res && res.results) || [];
+          const added = results.reduce((sum, item) => sum + (item.added || 0), 0);
+          Components.showToast(`Watchlist checked: ${added} new download(s).`, 'success');
+          await this.loadWatchlist();
+          await this.loadTasks();
+        } catch (e) {
+          Components.showToast(`Watchlist check failed: ${e.message}`, 'error');
+        }
+      });
+    }
+
+    if (list) {
+      list.addEventListener('click', async (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+        const id = target.getAttribute('data-id');
+        const action = target.getAttribute('data-action');
+        const item = (this.watchlistItems || []).find(entry => entry.id === id);
+        if (!item) return;
+
+        if (action === 'check') {
+          try {
+            const res = await api.checkWatchlistItem(id);
+            Components.showToast(`Checked: +${res.added || 0} new, ${res.skipped || 0} skipped.`, 'success');
+            await this.loadWatchlist();
+            await this.loadTasks();
+          } catch (err) {
+            Components.showToast(`Check failed: ${err.message}`, 'error');
+          }
+        } else if (action === 'toggle') {
+          try {
+            await api.toggleWatchlistItem(id, !item.enabled);
+            await this.loadWatchlist();
+          } catch (err) {
+            Components.showToast(`Could not update watch: ${err.message}`, 'error');
+          }
+        } else if (action === 'remove') {
+          if (!confirm('Remove this watchlist item? Downloaded files are kept.')) return;
+          try {
+            await api.removeWatchlist(id);
+            await this.loadWatchlist();
+            Components.showToast('Removed from watchlist.', 'info');
+          } catch (err) {
+            Components.showToast(`Could not remove watch: ${err.message}`, 'error');
+          }
+        }
+      });
+    }
+  }
+
+  async loadWatchlist() {
+    const container = document.getElementById('watchlist-items');
+    if (!container) return;
+    try {
+      const res = await api.getWatchlist();
+      this.watchlistItems = (res && res.items) || [];
+      this.renderWatchlist();
+    } catch (e) {
+      container.innerHTML = `<div class="watchlist-empty">Could not load watchlist: ${Components.escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  renderWatchlist() {
+    const container = document.getElementById('watchlist-items');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!this.watchlistItems.length) {
+      container.innerHTML = `
+        <div class="watchlist-empty">
+          No watched sources yet. Add a channel or playlist URL above and Saveo will queue only new items.
+        </div>
+      `;
+      return;
+    }
+
+    this.watchlistItems.forEach(item => {
+      const card = document.createElement('div');
+      card.className = `watchlist-card${item.enabled === false ? ' paused' : ''}`;
+      const safeId = Components.escapeAttr(item.id || '');
+      const title = item.title || item.url || 'Watchlist item';
+      const safeTitle = Components.escapeHtml(title);
+      const safeUrl = Components.escapeHtml(item.url || '');
+      const safePlatform = Components.escapeHtml(item.platform || 'Media');
+      const folder = item.folder ? ` • ${Components.escapeHtml(item.folder)}` : '';
+      const lastChecked = item.last_checked
+        ? new Date(item.last_checked * 1000).toLocaleString()
+        : 'never';
+      const stats = `Last check: +${item.last_added || 0} new, ${item.last_skipped || 0} skipped • ${lastChecked}`;
+      const error = item.last_error
+        ? `<div class="watchlist-error">${Components.escapeHtml(item.last_error)}</div>`
+        : '';
+
+      card.innerHTML = `
+        <div class="watchlist-info">
+          <div class="watchlist-title" title="${Components.escapeAttr(title)}">${safeTitle}</div>
+          <div class="watchlist-meta">${safePlatform}${folder} • ${Components.escapeHtml(item.format_label || 'Best Quality')}</div>
+          <div class="watchlist-meta">${safeUrl}</div>
+          <div class="watchlist-stats">${stats}</div>
+          ${error}
+        </div>
+        <div class="watchlist-actions">
+          <button class="secondary-btn btn-sm" data-action="check" data-id="${safeId}">Check now</button>
+          <button class="secondary-btn btn-sm" data-action="toggle" data-id="${safeId}">${item.enabled === false ? 'Resume' : 'Pause'}</button>
+          <button class="icon-btn" data-action="remove" data-id="${safeId}" title="Remove from watchlist">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+      `;
+      container.appendChild(card);
+    });
   }
 
   // ================= UNIFIED DOWNLOADER =================
@@ -217,6 +467,47 @@ class SaveoApp {
         }
       });
     }
+
+    // Drag-and-drop links onto the input card (single or batch).
+    const dropZone = document.querySelector('.input-saveo-card');
+    const handleDroppedText = (text) => {
+      const value = (text || '').trim();
+      if (!value) return;
+      const urls = value.match(/https?:\/\/[^\s,;"'<>]+/g) || [];
+      const isBatch = urls.length > 1;
+      if (isBatch && batchDrawer && batchTextarea) {
+        batchDrawer.style.display = 'block';
+        if (btnBatchToggle) btnBatchToggle.classList.add('active');
+        batchTextarea.value = value;
+        if (btnClearBatch) btnClearBatch.style.display = 'flex';
+        batchTextarea.focus();
+      } else {
+        urlInput.value = value;
+        btnClear.style.display = 'flex';
+        this.instantDetectPlatform(value);
+        urlInput.focus();
+      }
+      Components.showToast(isBatch ? `Dropped ${urls.length} links into the batch input.` : 'Link dropped into the input.', 'info');
+    };
+    const bindDrop = (el) => {
+      if (!el) return;
+      el.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (dropZone) dropZone.classList.add('drag-over');
+      });
+      el.addEventListener('dragleave', () => {
+        if (dropZone) dropZone.classList.remove('drag-over');
+      });
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropZone) dropZone.classList.remove('drag-over');
+        handleDroppedText(e.dataTransfer ? e.dataTransfer.getData('text') : '');
+      });
+    };
+    bindDrop(dropZone);
+    bindDrop(urlInput);
+    bindDrop(batchTextarea);
 
     // Paste button (reads clipboard directly from native backend or web API)
     btnPaste.addEventListener('click', async () => {
@@ -295,6 +586,7 @@ class SaveoApp {
       this.selectedMode = 'video';
       modeBtnVideo.classList.add('active');
       modeBtnAudio.classList.remove('active');
+      document.querySelectorAll('#advanced-formats-list .advanced-format-row').forEach(r => r.classList.remove('selected'));
       document.getElementById('video-formats-section').style.display = 'block';
       document.getElementById('audio-formats-section').style.display = 'none';
       const btnText = document.getElementById('btn-start-download-text');
@@ -319,6 +611,7 @@ class SaveoApp {
       this.selectedMode = 'audio';
       modeBtnAudio.classList.add('active');
       modeBtnVideo.classList.remove('active');
+      document.querySelectorAll('#advanced-formats-list .advanced-format-row').forEach(r => r.classList.remove('selected'));
       document.getElementById('video-formats-section').style.display = 'none';
       document.getElementById('audio-formats-section').style.display = 'block';
       const btnText = document.getElementById('btn-start-download-text');
@@ -435,12 +728,21 @@ class SaveoApp {
       document.getElementById('analyze-error').style.display = 'none';
     });
 
-    // Copy title button
-    btnCopyTitle.addEventListener('click', () => {
+    // Copy title (button + clicking the title itself)
+    const copyMediaTitle = () => {
       const title = document.getElementById('media-title').textContent;
-      navigator.clipboard.writeText(title);
-      Components.showToast('Title copied to clipboard!', 'success');
-    });
+      if (!navigator.clipboard || !navigator.clipboard.writeText) {
+        Components.showToast('Clipboard is unavailable.', 'error');
+        return;
+      }
+      navigator.clipboard.writeText(title).then(
+        () => Components.showToast('Title copied to clipboard!', 'success'),
+        () => Components.showToast('Could not copy title.', 'error')
+      );
+    };
+    if (btnCopyTitle) btnCopyTitle.addEventListener('click', copyMediaTitle);
+    const mediaTitleEl = document.getElementById('media-title');
+    if (mediaTitleEl) mediaTitleEl.addEventListener('click', copyMediaTitle);
 
     // Header open folder button (guarded)
     const headerOpenFolder = document.getElementById('header-open-folder');
@@ -458,6 +760,51 @@ class SaveoApp {
         this.tasks = (this.tasks || []).filter(t => t.status === 'queued' || t.status === 'downloading' || t.status === 'processing' || t.status === 'pending');
         this.renderQueueList();
         Components.showToast('Cleared recent completed downloads.', 'info');
+      });
+    }
+
+    // Bulk queue actions (desktop)
+    const btnPauseAll = document.getElementById('btn-pause-all');
+    if (btnPauseAll) {
+      btnPauseAll.addEventListener('click', async () => {
+        const ids = (this.tasks || [])
+          .filter(t => ['downloading', 'processing', 'queued'].includes(t.status))
+          .map(t => t.id);
+        if (!ids.length) {
+          Components.showToast('No active downloads to pause.', 'info');
+          return;
+        }
+        await Promise.allSettled(ids.map(id => api.pauseTask(id)));
+        await this.loadTasks();
+        Components.showToast(`Paused ${ids.length} download(s).`, 'info');
+      });
+    }
+
+    const btnResumeAll = document.getElementById('btn-resume-all');
+    if (btnResumeAll) {
+      btnResumeAll.addEventListener('click', async () => {
+        const ids = (this.tasks || []).filter(t => t.status === 'paused').map(t => t.id);
+        if (!ids.length) {
+          Components.showToast('No paused downloads to resume.', 'info');
+          return;
+        }
+        await Promise.allSettled(ids.map(id => api.resumeTask(id)));
+        await this.loadTasks();
+        Components.showToast(`Resumed ${ids.length} download(s).`, 'info');
+      });
+    }
+
+    const btnRetryFailed = document.getElementById('btn-retry-failed');
+    if (btnRetryFailed) {
+      btnRetryFailed.addEventListener('click', async () => {
+        const ids = (this.tasks || []).filter(t => t.status === 'failed' || t.status === 'cancelled').map(t => t.id);
+        if (!ids.length) {
+          Components.showToast('No failed downloads to retry.', 'info');
+          return;
+        }
+        await Promise.allSettled(ids.map(id => api.retryTask(id)));
+        await this.loadTasks();
+        Components.showToast(`Retrying ${ids.length} download(s).`, 'info');
       });
     }
 
@@ -600,6 +947,7 @@ class SaveoApp {
     document.getElementById('analyze-error').style.display = 'none';
     this.currentMedia = null;
     this.selectedFormat = null;
+    this.selectedClip = null;
     this.activeSingleTaskId = null;
   }
 
@@ -747,6 +1095,17 @@ class SaveoApp {
         this.selectedFormat = fmt;
       });
 
+      // Exact source streams (codec/fps/HDR/bitrate), desktop and web only.
+      Components.renderAdvancedFormats(data.advanced_formats || [], (fmt) => {
+        this.selectedFormat = fmt;
+      });
+
+      // Chapter clips (desktop/web sources that expose chapters).
+      this.selectedClip = null;
+      Components.renderChapters(data.chapters || [], (chapter) => {
+        this.selectedClip = chapter;
+      });
+
       // Show preview card
       document.getElementById('media-card').style.display = 'block';
 
@@ -820,24 +1179,52 @@ class SaveoApp {
     if (!this.currentMedia) return;
 
     const isAudio = this.selectedMode === 'audio';
-    const formatId = this.selectedFormat ? this.selectedFormat.format_id : 'best';
-    const formatLabel = this.selectedFormat ? this.selectedFormat.label : 'Best Quality';
+    const advanced = Boolean(this.selectedFormat && this.selectedFormat.advanced);
+    let formatId = this.selectedFormat ? this.selectedFormat.format_id : 'best';
+    if (advanced && !this.selectedFormat.has_audio) {
+      formatId = `${this.selectedFormat.format_id}+bestaudio`;
+    }
+    const formatLabel = (this.selectedFormat ? this.selectedFormat.label : 'Best Quality')
+      + (advanced && !this.selectedFormat.has_audio ? ' + audio' : '');
     const audioCodec = isAudio && this.selectedFormat ? this.selectedFormat.ext : 'mp3';
     const outDir = document.getElementById('selected-save-dir').textContent.trim() || this.settings.download_dir;
+    const clip = this.selectedClip;
+    const clipSuffix = clip
+      ? ` • Clip ${Components.formatSeconds(clip.start_time)}-${clip.end_time != null ? Components.formatSeconds(clip.end_time) : 'end'}`
+      : '';
+    const downloadTitle = clip ? `${this.currentMedia.title} - ${clip.title}` : this.currentMedia.title;
+
+    const payload = {
+      url: this.currentMedia.url,
+      format_id: formatId,
+      format_label: `${formatLabel}${clipSuffix}`,
+      is_audio: isAudio,
+      audio_format: audioCodec,
+      output_dir: outDir,
+      title: downloadTitle,
+      thumbnail: this.currentMedia.thumbnail,
+      expected_size_str: this.selectedFormat ? (this.selectedFormat.filesize_str || '') : '',
+      expected_bytes: this.selectedFormat ? (this.selectedFormat.filesize_approx || 0) : 0,
+      start_time: clip ? clip.start_time : null,
+      end_time: clip && clip.end_time != null ? clip.end_time : null
+    };
 
     try {
-      const task = await api.startDownload({
-        url: this.currentMedia.url,
-        format_id: formatId,
-        format_label: formatLabel,
-        is_audio: isAudio,
-        audio_format: audioCodec,
-        output_dir: outDir,
-        title: this.currentMedia.title,
-        thumbnail: this.currentMedia.thumbnail,
-        expected_size_str: this.selectedFormat ? (this.selectedFormat.filesize_str || '') : '',
-        expected_bytes: this.selectedFormat ? (this.selectedFormat.filesize_approx || 0) : 0
-      });
+      let task = await api.startDownload(payload);
+
+      if (task && task.duplicate) {
+        const existing = task.existing || {};
+        if (existing.duplicate_source === 'queue') {
+          Components.showToast('Already in the download queue.', 'info');
+          return;
+        }
+        const label = existing.filename || existing.title || 'this media';
+        if (!confirm(`Already downloaded: ${label}\n\nDownload another copy anyway?`)) {
+          Components.showToast('Skipped: this file is already in your library.', 'info');
+          return;
+        }
+        task = await api.startDownload({ ...payload, force: true });
+      }
 
       this.activeSingleTaskId = task.id;
 
@@ -860,7 +1247,7 @@ class SaveoApp {
   async startPlaylistDownload(playlistData, selectedEntries, options) {
     try {
       const urls = selectedEntries.map(e => e.url);
-      await api.batchEnqueue({
+      const res = await api.batchEnqueue({
         urls,
         items: selectedEntries,
         playlist_folder: playlistData.title,
@@ -872,7 +1259,13 @@ class SaveoApp {
       });
 
       document.getElementById('playlist-container').innerHTML = '';
-      Components.showToast(`Downloading ${selectedEntries.length} videos from "${playlistData.title}"!`, 'success');
+      const started = res && typeof res.count === 'number' ? res.count : selectedEntries.length;
+      const skipped = (res && res.skipped) ? res.skipped.length : 0;
+      if (started === 0 && skipped > 0) {
+        Components.showToast(`All ${skipped} selected videos are already downloaded.`, 'info');
+      } else {
+        Components.showToast(`Downloading ${started} videos from "${playlistData.title}"${skipped ? ` (${skipped} already downloaded)` : ''}.`, 'success');
+      }
       await this.loadTasks();
 
     } catch (e) {
@@ -884,7 +1277,7 @@ class SaveoApp {
   async startBatchDownload(selectedItems, options) {
     try {
       const urls = selectedItems.map(it => it.url);
-      await api.batchEnqueue({
+      const res = await api.batchEnqueue({
         urls,
         items: selectedItems,
         is_audio: options.is_audio,
@@ -895,7 +1288,13 @@ class SaveoApp {
       });
 
       document.getElementById('batch-container').innerHTML = '';
-      Components.showToast(`Downloading ${selectedItems.length} items directly!`, 'success');
+      const started = res && typeof res.count === 'number' ? res.count : selectedItems.length;
+      const skipped = (res && res.skipped) ? res.skipped.length : 0;
+      if (started === 0 && skipped > 0) {
+        Components.showToast(`All ${skipped} selected items are already downloaded.`, 'info');
+      } else {
+        Components.showToast(`Downloading ${started} items${skipped ? ` (${skipped} already downloaded)` : ''}.`, 'success');
+      }
       await this.loadTasks();
 
     } catch (e) {
@@ -1030,6 +1429,33 @@ class SaveoApp {
       });
     }
 
+    const transcriptInput = document.getElementById('transcript-search-input');
+    const transcriptResults = document.getElementById('transcript-results');
+    let transcriptTimer = null;
+    if (transcriptInput && transcriptResults) {
+      if (typeof window.SaveoAndroid !== 'undefined') {
+        const block = transcriptInput.closest('.transcript-search-block');
+        if (block) block.style.display = 'none';
+      }
+      transcriptInput.addEventListener('input', () => {
+        clearTimeout(transcriptTimer);
+        const query = transcriptInput.value.trim();
+        if (query.length < 2) {
+          transcriptResults.innerHTML = '';
+          return;
+        }
+        transcriptTimer = setTimeout(async () => {
+          try {
+            const results = await api.searchTranscripts(query);
+            Components.renderTranscriptResults(results, (result) => this.downloadTranscriptClip(result));
+          } catch (e) {
+            transcriptResults.innerHTML = '';
+            Components.showToast(`Subtitle search failed: ${e.message}`, 'error');
+          }
+        }, 300);
+      });
+    }
+
     if (btnOpenFolder) {
       btnOpenFolder.addEventListener('click', async () => {
         await api.openFolder(this.settings.download_dir);
@@ -1042,6 +1468,42 @@ class SaveoApp {
           await api.clearHistory();
           await this.loadHistory();
           Components.showToast('Download history cleared.', 'info');
+        }
+      });
+    }
+
+    const btnExportManifest = document.getElementById('btn-export-manifest');
+    if (btnExportManifest) {
+      btnExportManifest.addEventListener('click', async () => {
+        try {
+          const items = await api.getHistory();
+          const manifest = {
+            generated_at: new Date().toISOString(),
+            app: 'Saveo',
+            items: (items || []).map(item => ({
+              id: item.id,
+              title: item.title,
+              url: item.url,
+              filename: item.filename,
+              file_size: item.file_size,
+              format_label: item.format_label,
+              sha256: item.sha256 || '',
+              created_at_str: item.created_at_str || '',
+              provenance_path: item.provenance_path || ''
+            }))
+          };
+          const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'saveo-library-manifest.json';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+          Components.showToast('Library manifest exported.', 'success');
+        } catch (e) {
+          Components.showToast(`Manifest export failed: ${e.message}`, 'error');
         }
       });
     }
@@ -1060,6 +1522,46 @@ class SaveoApp {
           await api.openFile(path, id);
         } else if (action === 'reveal') {
           await api.revealFile(path, id);
+        } else if (action === 'delete-file') {
+          if (!confirm('Delete the actual file from disk? This cannot be undone.')) return;
+          await api.deleteHistoryItem(id, true);
+          const card = document.getElementById(`hist-item-${id}`);
+          if (card) card.remove();
+          await this.loadHistory();
+          Components.showToast('File deleted from disk.', 'info');
+        } else if (action === 'verify') {
+          try {
+            const result = await api.verifyHistoryItem(id);
+            if (result.status === 'verified') {
+              Components.showToast('Verified: the file hash matches the receipt.', 'success');
+            } else if (result.status === 'changed') {
+              Components.showToast('Warning: the file has changed since it was downloaded.', 'error');
+            } else if (result.status === 'missing') {
+              Components.showToast('File is missing from disk.', 'error');
+            } else {
+              Components.showToast('This file cannot be verified on this platform.', 'info');
+            }
+          } catch (e) {
+            Components.showToast(`Verification failed: ${e.message}`, 'error');
+          }
+        } else if (action === 'redownload') {
+          const url = target.getAttribute('data-url');
+          if (!url) return;
+          await api.startDownload({
+            url,
+            format_id: target.getAttribute('data-format') || 'best',
+            format_label: target.getAttribute('data-format-label') || 'Best Quality',
+            is_audio: target.getAttribute('data-audio') === '1',
+            audio_format: target.getAttribute('data-audio-format') || 'mp3',
+            output_dir: this.settings.download_dir,
+            title: target.getAttribute('data-title') || '',
+            thumbnail: target.getAttribute('data-thumb') || '',
+            start_time: target.getAttribute('data-start') !== '' ? parseFloat(target.getAttribute('data-start')) : null,
+            end_time: target.getAttribute('data-end') !== '' ? parseFloat(target.getAttribute('data-end')) : null,
+            force: true
+          });
+          await this.loadTasks();
+          Components.showToast('Re-download queued.', 'success');
         } else if (action === 'delete-hist') {
           await api.deleteHistoryItem(id);
           const card = document.getElementById(`hist-item-${id}`);
@@ -1068,6 +1570,32 @@ class SaveoApp {
           Components.showToast('Removed record from history.', 'info');
         }
       });
+    }
+  }
+
+  async downloadTranscriptClip(result) {
+    if (!result || !result.url) {
+      Components.showToast('This library item has no source URL for clipping.', 'error');
+      return;
+    }
+    try {
+      await api.startDownload({
+        url: result.url,
+        format_id: result.format_id || 'best',
+        format_label: `${result.format_label || 'Best Quality'} • Clip`,
+        is_audio: Boolean(result.is_audio),
+        audio_format: result.audio_format || 'mp3',
+        output_dir: this.settings.download_dir,
+        title: `${result.title} - clip ${Components.formatSeconds(result.start_time)}`,
+        thumbnail: result.thumbnail || '',
+        start_time: result.start_time,
+        end_time: result.end_time,
+        force: true
+      });
+      await this.loadTasks();
+      Components.showToast('Transcript clip queued.', 'success');
+    } catch (e) {
+      Components.showToast(`Could not queue clip: ${e.message}`, 'error');
     }
   }
 
@@ -1127,6 +1655,8 @@ class SaveoApp {
     const btnBrowse = document.getElementById('btn-settings-browse');
     const sliderConcurrent = document.getElementById('setting-concurrent');
     const badgeConcurrent = document.getElementById('concurrent-val-badge');
+    const sliderFragments = document.getElementById('setting-fragment-concurrency');
+    const badgeFragments = document.getElementById('fragment-val-badge');
     const btnSave = document.getElementById('btn-save-settings');
 
     if (sliderConcurrent && badgeConcurrent) {
@@ -1135,6 +1665,14 @@ class SaveoApp {
       };
       sliderConcurrent.addEventListener('input', updateConcurrentBadge);
       sliderConcurrent.addEventListener('change', updateConcurrentBadge);
+    }
+
+    if (sliderFragments && badgeFragments) {
+      const updateFragmentBadge = () => {
+        badgeFragments.textContent = sliderFragments.value;
+      };
+      sliderFragments.addEventListener('input', updateFragmentBadge);
+      sliderFragments.addEventListener('change', updateFragmentBadge);
     }
 
     if (btnBrowse) {
@@ -1237,6 +1775,13 @@ class SaveoApp {
         const aCodec = document.getElementById('setting-audio-codec');
         const notif = document.getElementById('setting-notifications');
         const cookieBrowser = document.getElementById('setting-cookie-browser');
+        const rateInput = document.getElementById('setting-rate-limit');
+        const parsedRate = rateInput ? parseInt(rateInput.value, 10) : NaN;
+        const subsToggle = document.getElementById('setting-subtitles');
+        const subtitleLangs = document.getElementById('setting-subtitle-langs');
+        const subtitleMode = document.getElementById('setting-subtitle-mode');
+        const embedMeta = document.getElementById('setting-embed-metadata');
+        const embedThumb = document.getElementById('setting-embed-thumbnail');
         const activeThemeChip = document.querySelector('.theme-chip.active');
         const selectedTheme = (activeThemeChip ? activeThemeChip.getAttribute('data-theme') : null) || ThemeManager.currentTheme || 'dark';
 
@@ -1244,8 +1789,29 @@ class SaveoApp {
           download_dir: dirInput ? dirInput.value : (this.settings.download_dir || ''),
           default_video_quality: vQual ? vQual.value : (this.settings.default_video_quality || 'best'),
           default_audio_format: aCodec ? aCodec.value : (this.settings.default_audio_format || 'mp3'),
-          max_concurrent_downloads: sliderConcurrent ? parseInt(sliderConcurrent.value, 10) : (this.settings.max_concurrent_downloads || 3),
+          max_concurrent_downloads: typeof window.SaveoAndroid !== 'undefined'
+            ? 1
+            : (sliderConcurrent ? parseInt(sliderConcurrent.value, 10) : (this.settings.max_concurrent_downloads || 3)),
+          fragment_concurrency: sliderFragments ? parseInt(sliderFragments.value, 10) : (this.settings.fragment_concurrency || 1),
+          rate_limit_kbps: Number.isNaN(parsedRate) ? (this.settings.rate_limit_kbps || 0) : parsedRate,
+          filename_template: (document.getElementById('setting-filename-template')?.value || '{title}').trim() || '{title}',
+          subtitles_enabled: subsToggle ? subsToggle.checked : Boolean(this.settings.subtitles_enabled),
+          subtitle_langs: (subtitleLangs ? subtitleLangs.value : (this.settings.subtitle_langs || 'en')).trim() || 'en',
+          subtitle_mode: subtitleMode ? subtitleMode.value : (this.settings.subtitle_mode || 'sidecar'),
+          embed_metadata: embedMeta ? embedMeta.checked : Boolean(this.settings.embed_metadata),
+          embed_thumbnail: embedThumb ? embedThumb.checked : Boolean(this.settings.embed_thumbnail),
+          schedule_enabled: document.getElementById('setting-schedule-enabled')
+            ? document.getElementById('setting-schedule-enabled').checked
+            : Boolean(this.settings.schedule_enabled),
+          schedule_start: (document.getElementById('setting-schedule-start')?.value || this.settings.schedule_start || '01:00'),
+          schedule_stop: (document.getElementById('setting-schedule-stop')?.value || this.settings.schedule_stop || '07:00'),
+          beam_enabled: document.getElementById('setting-beam-enabled')
+            ? document.getElementById('setting-beam-enabled').checked
+            : Boolean(this.settings.beam_enabled),
           notifications: notif ? notif.checked : (this.settings.notifications !== false),
+          skip_duplicates: document.getElementById('setting-skip-duplicates')
+            ? document.getElementById('setting-skip-duplicates').checked
+            : (this.settings.skip_duplicates !== false),
           cookie_browser: cookieBrowser ? cookieBrowser.value : (this.settings.cookie_browser || 'none'),
           cookie_file: cookieInput ? cookieInput.value.trim() : (this.settings.cookie_file || ''),
           theme: selectedTheme
@@ -1260,6 +1826,7 @@ class SaveoApp {
           }
           Components.showToast('Preferences saved successfully!', 'success');
           this.loadSystemStatus();
+          this.loadBeamInfo();
         } catch (e) {
           Components.showToast(`Failed to save settings: ${e.message}`, 'error');
         }
@@ -1283,13 +1850,81 @@ class SaveoApp {
       if (aCodec) aCodec.value = this.settings.default_audio_format || 'mp3';
 
       const concurrent = document.getElementById('setting-concurrent');
-      if (concurrent) concurrent.value = this.settings.max_concurrent_downloads || 3;
+      if (concurrent) {
+        // Android's pause/cancel state is global, so downloads run one at a time there.
+        const isMobile = typeof window.SaveoAndroid !== 'undefined';
+        concurrent.max = isMobile ? '1' : '5';
+        concurrent.value = isMobile ? 1 : (this.settings.max_concurrent_downloads || 3);
+      }
 
       const badge = document.getElementById('concurrent-val-badge');
-      if (badge) badge.textContent = this.settings.max_concurrent_downloads || 3;
+      if (badge) badge.textContent = concurrent ? concurrent.value : (this.settings.max_concurrent_downloads || 3);
+
+      const filenameInput = document.getElementById('setting-filename-template');
+      if (filenameInput) {
+        filenameInput.value = this.settings.filename_template || '{title}';
+        // The embedded Android engine names files from the media title only.
+        if (typeof window.SaveoAndroid !== 'undefined') {
+          const row = filenameInput.closest('.setting-item');
+          if (row) row.style.display = 'none';
+        }
+      }
+
+      const fragmentSlider = document.getElementById('setting-fragment-concurrency');
+      if (fragmentSlider) fragmentSlider.value = this.settings.fragment_concurrency || 1;
+      const fragmentBadge = document.getElementById('fragment-val-badge');
+      if (fragmentBadge) fragmentBadge.textContent = fragmentSlider ? fragmentSlider.value : (this.settings.fragment_concurrency || 1);
+
+      const rateInput = document.getElementById('setting-rate-limit');
+      if (rateInput) rateInput.value = this.settings.rate_limit_kbps || 0;
+
+      const subsToggle = document.getElementById('setting-subtitles');
+      if (subsToggle) subsToggle.checked = Boolean(this.settings.subtitles_enabled);
+      const subtitleLangs = document.getElementById('setting-subtitle-langs');
+      if (subtitleLangs) subtitleLangs.value = this.settings.subtitle_langs || 'en';
+      const subtitleMode = document.getElementById('setting-subtitle-mode');
+      if (subtitleMode) subtitleMode.value = this.settings.subtitle_mode || 'sidecar';
+      const embedMeta = document.getElementById('setting-embed-metadata');
+      if (embedMeta) embedMeta.checked = Boolean(this.settings.embed_metadata);
+      const embedThumb = document.getElementById('setting-embed-thumbnail');
+      if (embedThumb) embedThumb.checked = Boolean(this.settings.embed_thumbnail);
+
+      const scheduleToggle = document.getElementById('setting-schedule-enabled');
+      if (scheduleToggle) scheduleToggle.checked = Boolean(this.settings.schedule_enabled);
+      const scheduleStart = document.getElementById('setting-schedule-start');
+      if (scheduleStart) scheduleStart.value = this.settings.schedule_start || '01:00';
+      const scheduleStop = document.getElementById('setting-schedule-stop');
+      if (scheduleStop) scheduleStop.value = this.settings.schedule_stop || '07:00';
+
+      const beamToggle = document.getElementById('setting-beam-enabled');
+      if (beamToggle) beamToggle.checked = Boolean(this.settings.beam_enabled);
+
+      // These shape the desktop yt-dlp engine; the Android engine has fixed defaults.
+      if (typeof window.SaveoAndroid !== 'undefined') {
+        [
+          'setting-rate-limit',
+          'setting-fragment-concurrency',
+          'setting-subtitles',
+          'setting-subtitle-langs',
+          'setting-subtitle-mode',
+          'setting-embed-metadata',
+          'setting-embed-thumbnail',
+          'setting-schedule-enabled',
+          'setting-schedule-start',
+          'setting-schedule-stop',
+        ].forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const row = el.closest('.setting-item');
+          if (row) row.style.display = 'none';
+        });
+      }
 
       const notif = document.getElementById('setting-notifications');
       if (notif) notif.checked = this.settings.notifications !== false;
+
+      const skipDup = document.getElementById('setting-skip-duplicates');
+      if (skipDup) skipDup.checked = this.settings.skip_duplicates !== false;
 
       const cookieInput = document.getElementById('setting-cookie-input');
       if (cookieInput) {
@@ -1309,10 +1944,23 @@ class SaveoApp {
     }
   }
 
+  setServicesStatus(state) {
+    const pill = document.getElementById('server-status-pill');
+    const label = document.getElementById('server-status-label');
+    if (!pill || !label) return;
+    if (state === 'reconnecting') {
+      pill.className = 'header-server-pill status-reconnecting';
+      label.textContent = 'Reconnecting...';
+    } else {
+      pill.className = 'header-server-pill status-ready';
+      label.textContent = 'Services Online';
+    }
+  }
+
   async loadSystemStatus() {
     try {
       const status = await api.getSystemStatus();
-      const appVer = status.app_version || 'v1.4.4';
+      const appVer = status.app_version || 'v1.4.16';
       const rawYtdlp = status.ytdlp_version;
 
       const verPill = document.getElementById('header-version-pill');
@@ -1331,14 +1979,7 @@ class SaveoApp {
       const trustVer = document.getElementById('trust-version');
       if (trustVer) trustVer.textContent = appVer;
 
-      const serverPill = document.getElementById('server-status-pill');
-      const serverLabel = document.getElementById('server-status-label');
-      if (serverPill) {
-        serverPill.className = 'header-server-pill status-ready';
-      }
-      if (serverLabel) {
-        serverLabel.textContent = 'Services Online';
-      }
+      this.setServicesStatus('ready');
 
       const diagYtdlp = document.getElementById('diag-ytdlp');
       if (diagYtdlp) {
@@ -1464,6 +2105,7 @@ class SaveoApp {
         if (/^[-*+]\s+/.test(line)) {
           let content = line.replace(/^[-*+]\s+/, '').trim();
           if (!content || content === '-' || content === '--') continue;
+          content = Components.escapeHtml(content);
           content = content.replace(/\*\*(.*?)\*\*:?/g, (match, p1) => {
             const title = p1.replace(/:+$/, '').trim();
             return `<span class="cl-feature-highlight">${title}:</span>`;
@@ -1492,7 +2134,7 @@ class SaveoApp {
       const curVerEl = document.getElementById('update-cur-ver');
       const newVerEl = document.getElementById('update-new-ver');
 
-      if (curVerEl) curVerEl.textContent = 'v1.4.4';
+      if (curVerEl) curVerEl.textContent = 'v1.4.16';
       if (newVerEl) newVerEl.textContent = '...';
       if (titleEl) titleEl.textContent = 'Checking for Updates...';
       if (descEl) descEl.textContent = 'Contacting update servers to verify Saveo release and platform core engine status...';
@@ -1501,8 +2143,8 @@ class SaveoApp {
       try {
         const info = await api.checkUpdates();
         currentUpdateInfo = info;
-        const appInst = info.app_installed || 'v1.4.4';
-        const appLatest = info.app_latest || 'v1.4.4';
+        const appInst = info.app_installed || 'v1.4.16';
+        const appLatest = info.app_latest || 'v1.4.16';
         const isUpToDate = Boolean(info.app_up_to_date);
 
         if (curVerEl) curVerEl.textContent = appInst;
@@ -1540,8 +2182,8 @@ class SaveoApp {
           downloadState = 'can-download';
         }
       } catch (e) {
-        if (curVerEl) curVerEl.textContent = 'v1.4.4';
-        if (newVerEl) newVerEl.textContent = 'v1.4.4';
+        if (curVerEl) curVerEl.textContent = 'v1.4.16';
+        if (newVerEl) newVerEl.textContent = 'v1.4.16';
         if (titleEl) titleEl.textContent = 'Saveo Core Engine';
         if (descEl) descEl.textContent = 'Verified online. You can check the embedded yt-dlp core engine.';
         if (changelogEl) changelogEl.innerHTML = renderChangelog('');
@@ -1580,7 +2222,7 @@ class SaveoApp {
     if (btnPrimary) {
       btnPrimary.addEventListener('click', async () => {
       if (downloadState === 'can-download') {
-        const url = currentUpdateInfo?.installer_url || `https://github.com/ProTechPh/Saveo/releases/download/${currentUpdateInfo?.app_latest || 'v1.3.7'}/Saveo-Setup.exe`;
+        const url = currentUpdateInfo?.installer_url || `https://github.com/ProTechPh/Saveo/releases/download/${currentUpdateInfo?.app_latest || 'v1.4.16'}/Saveo-Setup.exe`;
         const size = currentUpdateInfo?.installer_size || 0;
 
         downloadState = 'downloading';
@@ -1690,7 +2332,8 @@ class SaveoApp {
           if (statusMsg) {
             statusMsg.style.display = 'block';
             statusMsg.style.color = '#f59e0b';
-            statusMsg.innerHTML = `${e.message} <br/><a href="#" id="link-open-installer-folder" style="color:var(--accent);text-decoration:underline;display:inline-block;margin-top:6px;font-weight:500;">Open Installer in Downloads</a>`;
+            const safeMessage = Components.escapeHtml(e.message || '');
+            statusMsg.innerHTML = `${safeMessage} <br/><a href="#" id="link-open-installer-folder" style="color:var(--accent);text-decoration:underline;display:inline-block;margin-top:6px;font-weight:500;">Open Installer in Downloads</a>`;
             const openLink = document.getElementById('link-open-installer-folder');
             if (openLink) {
               openLink.addEventListener('click', (evt) => {
@@ -1779,6 +2422,9 @@ class SaveoApp {
 
   // ================= WEBSOCKET & NATIVE EVENT LISTENERS =================
   setupWebSocketListeners() {
+    api.on('sse_connected', () => this.setServicesStatus('ready'));
+    api.on('sse_disconnected', () => this.setServicesStatus('reconnecting'));
+
     api.on('initial_state', (payload) => {
       if (payload && Array.isArray(payload.tasks)) {
         this.tasks = payload.tasks;

@@ -143,6 +143,14 @@ public class DownloadForegroundService extends Service {
             handleCancel();
             return START_NOT_STICKY;
         } else if (ACTION_RESUME_DOWNLOAD.equals(action)) {
+            String resumeTitle = intent.getStringExtra(EXTRA_TITLE);
+            if (resumeTitle != null && !resumeTitle.trim().isEmpty()) {
+                currentMediaTitle = resumeTitle.trim();
+            }
+            // ACTION_RESUME is sent with startForegroundService(), so startForeground()
+            // must follow immediately and the active counter must be incremented.
+            startForegroundServiceNotification(currentMediaTitle, "Resuming download...", 0);
+            activeDownloadCount.incrementAndGet();
             handleResume(intent);
             return START_NOT_STICKY;
         }
@@ -165,6 +173,8 @@ public class DownloadForegroundService extends Service {
         if (url != null && !url.trim().isEmpty()) {
             activeDownloadCount.incrementAndGet();
             executeDownload(url, formatId, isAudio, audioFormat, title, playlistFolder);
+        } else {
+            stopIfIdle();
         }
 
         return START_NOT_STICKY;
@@ -391,6 +401,7 @@ public class DownloadForegroundService extends Service {
                 }
             } catch (Exception ignored) {}
             handlePausedCallback();
+            stopIfIdle();
         });
     }
 
@@ -403,6 +414,7 @@ public class DownloadForegroundService extends Service {
                 }
             } catch (Exception ignored) {}
             handleCancelledCallback();
+            stopIfIdle();
         });
     }
 
@@ -436,7 +448,6 @@ public class DownloadForegroundService extends Service {
         if (listener != null) {
             mainHandler.post(listener::onCancelled);
         }
-        checkCompletionStatus();
     }
 
     private void handleErrorCallback(String errorMsg) {
@@ -444,22 +455,26 @@ public class DownloadForegroundService extends Service {
         if (listener != null) {
             mainHandler.post(() -> listener.onError("{\"error\": \"" + errorMsg.replace("\"", "\\\"") + "\"}"));
         }
-        checkCompletionStatus();
     }
 
     private void checkCompletionStatus() {
         int remaining = activeDownloadCount.decrementAndGet();
         if (remaining <= 0) {
             activeDownloadCount.set(0);
-            releaseWakeLock();
-            // Stop foreground state and dismiss the ongoing progress notification
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                stopForeground(STOP_FOREGROUND_REMOVE);
-            } else {
-                stopForeground(true);
-            }
-            stopSelf();
+            stopIfIdle();
         }
+    }
+
+    private void stopIfIdle() {
+        if (activeDownloadCount.get() > 0) return;
+        releaseWakeLock();
+        // Stop foreground state and dismiss the ongoing progress notification
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+        } else {
+            stopForeground(true);
+        }
+        stopSelf();
     }
 
     @Override

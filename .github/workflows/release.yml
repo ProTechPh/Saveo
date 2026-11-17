@@ -81,6 +81,7 @@ jobs:
           $tag = "${{ needs.prepare-version.outputs.tag }}"
           Write-Host "Configuring Saveo version: $tag (Clean: $ver)"
           Set-Content -Path VERSION -Value $ver
+          python scripts/sync_version.py
           "SAVEO_VERSION=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append
           "RELEASE_VERSION_CLEAN=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append
 
@@ -147,6 +148,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.5'
+
+      - name: Configure Version Metadata
+        run: |
+          echo "${{ needs.prepare-version.outputs.version }}" > VERSION
+          python3 scripts/sync_version.py
+          python3 scripts/sync_web_assets.py
 
       - name: Grant Execute Permissions to Gradle
         run: chmod +x android/gradlew
@@ -219,7 +226,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           echo "${{ needs.prepare-version.outputs.version }}" > VERSION
-          git add VERSION
+          python3 scripts/sync_version.py --finalize
+          python3 scripts/sync_web_assets.py
+          git add VERSION CHANGELOG.md site web server android installer.iss
           if ! git diff --cached --quiet; then
             git commit -m "chore(release): bump version to ${{ needs.prepare-version.outputs.tag }} [skip ci]"
             git push origin main
