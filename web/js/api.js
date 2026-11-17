@@ -976,17 +976,17 @@ class SaveoAPI {
         return new Promise((resolve) => {
           const handler = (e) => {
             window.removeEventListener('saveo_update_checked', handler);
-            resolve(e.detail || { app_installed: 'v1.4.16', app_latest: 'v1.4.16', app_up_to_date: true });
+            resolve(e.detail || { app_installed: 'v1.4.17', app_latest: 'v1.4.17', app_up_to_date: true });
           };
           window.addEventListener('saveo_update_checked', handler);
           window.SaveoAndroid.checkUpdates();
           setTimeout(() => {
             window.removeEventListener('saveo_update_checked', handler);
-            resolve({ app_installed: 'v1.4.16', app_latest: 'v1.4.16', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true });
+            resolve({ app_installed: 'v1.4.17', app_latest: 'v1.4.17', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true });
           }, 6000);
         });
       }
-      return { app_installed: 'v1.4.16', app_latest: 'v1.4.16', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true };
+      return { app_installed: 'v1.4.17', app_latest: 'v1.4.17', app_up_to_date: true, ytdlp_installed: 'Embedded', ytdlp_latest: 'Embedded', ytdlp_up_to_date: true };
     }
     return this.request('/api/system/check-updates');
   }

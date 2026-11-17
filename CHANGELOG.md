@@ -2,7 +2,7 @@
 
 All notable changes to Saveo will be documented in this file.
 
-## [Unreleased]
+## [1.4.17]
 
 - **Download safety & resume:**
   - Cancelling or failing one download no longer deletes `.part` files belonging to other concurrent downloads.

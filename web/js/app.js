@@ -1960,7 +1960,7 @@ class SaveoApp {
   async loadSystemStatus() {
     try {
       const status = await api.getSystemStatus();
-      const appVer = status.app_version || 'v1.4.16';
+      const appVer = status.app_version || 'v1.4.17';
       const rawYtdlp = status.ytdlp_version;
 
       const verPill = document.getElementById('header-version-pill');
@@ -2134,7 +2134,7 @@ class SaveoApp {
       const curVerEl = document.getElementById('update-cur-ver');
       const newVerEl = document.getElementById('update-new-ver');
 
-      if (curVerEl) curVerEl.textContent = 'v1.4.16';
+      if (curVerEl) curVerEl.textContent = 'v1.4.17';
       if (newVerEl) newVerEl.textContent = '...';
       if (titleEl) titleEl.textContent = 'Checking for Updates...';
       if (descEl) descEl.textContent = 'Contacting update servers to verify Saveo release and platform core engine status...';
@@ -2143,8 +2143,8 @@ class SaveoApp {
       try {
         const info = await api.checkUpdates();
         currentUpdateInfo = info;
-        const appInst = info.app_installed || 'v1.4.16';
-        const appLatest = info.app_latest || 'v1.4.16';
+        const appInst = info.app_installed || 'v1.4.17';
+        const appLatest = info.app_latest || 'v1.4.17';
         const isUpToDate = Boolean(info.app_up_to_date);
 
         if (curVerEl) curVerEl.textContent = appInst;
@@ -2182,8 +2182,8 @@ class SaveoApp {
           downloadState = 'can-download';
         }
       } catch (e) {
-        if (curVerEl) curVerEl.textContent = 'v1.4.16';
-        if (newVerEl) newVerEl.textContent = 'v1.4.16';
+        if (curVerEl) curVerEl.textContent = 'v1.4.17';
+        if (newVerEl) newVerEl.textContent = 'v1.4.17';
         if (titleEl) titleEl.textContent = 'Saveo Core Engine';
         if (descEl) descEl.textContent = 'Verified online. You can check the embedded yt-dlp core engine.';
         if (changelogEl) changelogEl.innerHTML = renderChangelog('');
@@ -2222,7 +2222,7 @@ class SaveoApp {
     if (btnPrimary) {
       btnPrimary.addEventListener('click', async () => {
       if (downloadState === 'can-download') {
-        const url = currentUpdateInfo?.installer_url || `https://github.com/ProTechPh/Saveo/releases/download/${currentUpdateInfo?.app_latest || 'v1.4.16'}/Saveo-Setup.exe`;
+        const url = currentUpdateInfo?.installer_url || `https://github.com/ProTechPh/Saveo/releases/download/${currentUpdateInfo?.app_latest || 'v1.4.17'}/Saveo-Setup.exe`;
         const size = currentUpdateInfo?.installer_size || 0;
 
         downloadState = 'downloading';

@@ -1091,11 +1091,11 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
         })
 
 
-def check_updates(installed_app_version: str = "v1.4.16") -> str:
+def check_updates(installed_app_version: str = "v1.4.17") -> str:
     """
     Checks for updates for Saveo and yt-dlp core.
     """
-    current_app_version = installed_app_version or "v1.4.16"
+    current_app_version = installed_app_version or "v1.4.17"
     if not current_app_version.startswith("v"):
         current_app_version = f"v{current_app_version}"
 

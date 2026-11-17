@@ -11,7 +11,7 @@ if (project.hasProperty("versionCode")) {
     }
 }
 
-def appVersionName = "1.4.16"
+def appVersionName = "1.4.17"
 if (project.hasProperty("versionName")) {
     appVersionName = project.property("versionName").toString().trim()
 }
