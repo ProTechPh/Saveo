@@ -99,6 +99,11 @@ from engine.providers.ytdlp_provider import humanize_error
 from engine.settings_manager import settings_manager
 from engine.history_manager import history_manager
 from engine.queue_manager import queue_manager, DownloadTask
+from engine import provenance
+from engine import transcripts
+from engine.watchlist_manager import watchlist_manager
+from .cast import build_feed, build_m3u, media_type_for
+from .beam import beam_server
 from engine.file_manager import (
     open_folder,
     open_in_folder,
@@ -141,7 +146,11 @@ async def lifespan(app: FastAPI):
                 asyncio.run_coroutine_threadsafe(_dispatch_sse_event(data), loop)
 
     queue_manager.add_listener(on_queue_event)
+    watchlist_manager.start_scheduler(queue_manager)
+    beam_server.apply(bool(settings_manager.get("beam_enabled", False)))
     yield
+    watchlist_manager.stop()
+    beam_server.stop()
 
 
 app = FastAPI(title="Saveo API", version="1.0.0", lifespan=lifespan)
@@ -202,12 +211,20 @@ async def security_and_auth_middleware(request: Request, call_next):
         "/",
     )
     if path.startswith("/api/") and path not in public_paths:
-        token = request.headers.get("x-auth-token") or request.query_params.get("token")
-        if not token or not secrets.compare_digest(token, AUTH_TOKEN):
-            return JSONResponse(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                content={"error": "Unauthorized", "detail": "Missing or invalid X-Auth-Token."}
-            )
+        is_public_cast = (
+            path.startswith("/api/cast/feed/")
+            or path.startswith("/api/cast/media/")
+            or path.startswith("/api/cast/m3u/")
+        )
+        if is_public_cast:
+            pass
+        else:
+            token = request.headers.get("x-auth-token") or request.query_params.get("token")
+            if not token or not secrets.compare_digest(token, AUTH_TOKEN):
+                return JSONResponse(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    content={"error": "Unauthorized", "detail": "Missing or invalid X-Auth-Token."}
+                )
 
     response = await call_next(request)
     return response
@@ -322,6 +339,8 @@ class DownloadRequest(BaseModel):
     thumbnail: Optional[str] = Field(None, max_length=2048)
     expected_size_str: Optional[str] = Field(None, max_length=100)
     expected_bytes: Optional[int] = Field(None)
+    start_time: Optional[float] = Field(None, ge=0)
+    end_time: Optional[float] = Field(None, ge=0)
     force: bool = False
 
 class BatchParseRequest(BaseModel):
@@ -340,6 +359,21 @@ class BatchEnqueueRequest(BaseModel):
 
 class PathRequest(BaseModel):
     path: Optional[str] = Field(None, max_length=1000)
+
+
+class WatchlistAddRequest(BaseModel):
+    url: str = Field(..., max_length=2048)
+    quality: str = Field("best", max_length=50)
+    folder: Optional[str] = Field("", max_length=200)
+    max_items: int = Field(10, ge=1, le=50)
+    min_duration: int = Field(0, ge=0, le=86400)
+    max_duration: int = Field(0, ge=0, le=604800)
+    include: Optional[str] = Field("", max_length=120)
+    exclude: Optional[str] = Field("", max_length=120)
+
+
+class WatchlistToggleRequest(BaseModel):
+    enabled: bool
 
 class FileRequest(BaseModel):
     file_path: Optional[str] = Field("", max_length=1000)
@@ -469,6 +503,7 @@ async def analyze_url(req: AnalyzeRequest):
                 } for f in meta.audio_formats
             ],
             "advanced_formats": getattr(meta, "advanced_formats", []),
+            "chapters": getattr(meta, "chapters", []),
             "default_download_dir": settings_manager.get("download_dir", get_default_download_dir())
         }
     except Exception as e:
@@ -515,7 +550,9 @@ async def start_download(req: DownloadRequest):
         audio_format=req.audio_format,
         output_dir=out_dir,
         expected_size_str=req.expected_size_str or "",
-        expected_bytes=req.expected_bytes or 0
+        expected_bytes=req.expected_bytes or 0,
+        start_time=req.start_time,
+        end_time=req.end_time
     )
     return task.to_dict()
 
@@ -700,9 +737,146 @@ async def clear_finished():
     return {"success": True}
 
 
+@app.get("/api/watchlist")
+async def get_watchlist():
+    return {"items": watchlist_manager.get_all()}
+
+
+@app.post("/api/watchlist")
+async def add_watchlist(req: WatchlistAddRequest):
+    url = req.url.strip()
+    if not registry.is_valid_url(url):
+        raise HTTPException(status_code=400, detail="Invalid URL provided.")
+    return watchlist_manager.add(
+        url,
+        quality=req.quality,
+        folder=req.folder or "",
+        max_items=req.max_items,
+        min_duration=req.min_duration,
+        max_duration=req.max_duration,
+        include=req.include or "",
+        exclude=req.exclude or "",
+        platform=registry.detect_platform(url),
+    )
+
+
+@app.delete("/api/watchlist/{item_id}")
+async def remove_watchlist(item_id: str):
+    return {"success": watchlist_manager.remove(item_id)}
+
+
+@app.post("/api/watchlist/check-all")
+async def check_all_watchlist():
+    loop = asyncio.get_event_loop()
+    results = await loop.run_in_executor(None, watchlist_manager.check_all, queue_manager)
+    return {"results": results}
+
+
+@app.post("/api/watchlist/{item_id}/check")
+async def check_watchlist_item(item_id: str):
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, watchlist_manager.check_one, item_id, queue_manager)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Watchlist item not found.")
+    return result
+
+
+@app.post("/api/watchlist/{item_id}/toggle")
+async def toggle_watchlist_item(item_id: str, req: WatchlistToggleRequest):
+    success = watchlist_manager.set_enabled(item_id, req.enabled)
+    if not success:
+        raise HTTPException(status_code=404, detail="Watchlist item not found.")
+    return {"success": True, "enabled": req.enabled}
+
+
+@app.get("/api/beam/info")
+async def beam_info():
+    return beam_server.info()
+
+
+@app.get("/api/cast/info")
+async def cast_info():
+    token = settings_manager.get("cast_token", "")
+    if not token:
+        token = secrets.token_urlsafe(24)
+        settings_manager.update({"cast_token": token})
+    return {
+        "feed_path": f"/api/cast/feed/{token}.xml",
+        "m3u_path": f"/api/cast/m3u/{token}.m3u",
+    }
+
+
+def _cast_token_valid(token: str) -> bool:
+    expected = settings_manager.get("cast_token", "")
+    return bool(expected) and secrets.compare_digest(str(token), str(expected))
+
+
+@app.get("/api/cast/feed/{token}.xml")
+async def cast_feed(token: str, request: Request):
+    if not _cast_token_valid(token):
+        raise HTTPException(status_code=404, detail="Feed not found.")
+    base_url = str(request.base_url).rstrip("/")
+    xml = build_feed(history_manager.get_all(), base_url, token)
+    return Response(content=xml, media_type="application/rss+xml")
+
+
+@app.get("/api/cast/m3u/{token}.m3u")
+async def cast_m3u(token: str, request: Request):
+    if not _cast_token_valid(token):
+        raise HTTPException(status_code=404, detail="Feed not found.")
+    base_url = str(request.base_url).rstrip("/")
+    return Response(content=build_m3u(history_manager.get_all(), base_url, token), media_type="audio/x-mpegurl")
+
+
+@app.get("/api/cast/media/{token}/{item_id}")
+async def cast_media(token: str, item_id: str):
+    if not _cast_token_valid(token):
+        raise HTTPException(status_code=404, detail="Media not found.")
+    record = next((item for item in history_manager.get_all() if item.get("id") == item_id), None)
+    if not record:
+        raise HTTPException(status_code=404, detail="Media not found.")
+    path = record.get("file_path")
+    if not path or not os.path.isfile(path) or not is_safe_disk_path(path):
+        raise HTTPException(status_code=404, detail="Media not found.")
+    return FileResponse(path, media_type=media_type_for(path), filename=os.path.basename(path))
+
+
 @app.get("/api/history")
 async def get_history():
     return history_manager.get_all()
+
+
+@app.get("/api/transcripts/search")
+async def search_transcripts(q: str = ""):
+    query = (q or "").strip()[:200]
+    if len(query) < 2:
+        return []
+    return transcripts.search_history(history_manager.get_all(), query, limit=50)
+
+
+@app.get("/api/history/{item_id}/verify")
+async def verify_history_item(item_id: str):
+    record = next((item for item in history_manager.get_all() if item.get("id") == item_id), None)
+    if not record:
+        raise HTTPException(status_code=404, detail="History item not found.")
+    path = record.get("file_path")
+    if not path or not is_safe_disk_path(path):
+        raise HTTPException(status_code=403, detail="File is not available for verification.")
+
+    result = provenance.verify_file(path, record.get("sha256", ""))
+    if result["status"] == "unverified":
+        digest = result["actual_sha256"]
+        receipt = provenance.write_sidecar(path, {
+            "source_url": record.get("url", ""),
+            "title": record.get("title", ""),
+            "format_label": record.get("format_label", ""),
+            "file_size": record.get("file_size", 0),
+            "sha256": digest,
+        })
+        history_manager.update_fields(item_id, {"sha256": digest, "provenance_path": receipt})
+        result["expected_sha256"] = digest
+        result["status"] = "verified"
+    return result
 
 
 @app.delete("/api/history/{item_id}")
@@ -726,6 +900,7 @@ async def get_settings():
 async def update_settings_endpoint(req: Dict[str, Any]):
     new_settings = req.get("settings", req) if isinstance(req, dict) else {}
     updated = settings_manager.update(new_settings)
+    beam_server.apply(bool(updated.get("beam_enabled", False)))
     return updated
 
 

@@ -48,6 +48,8 @@ class SettingsManager:
             "schedule_enabled": False,
             "schedule_start": "01:00",
             "schedule_stop": "07:00",
+            "cast_token": "",
+            "beam_enabled": False,
             "cookie_file": "",
             "cookie_browser": "none",
         }
@@ -113,6 +115,8 @@ class SettingsManager:
                 updates[flag] = bool(updates[flag])
         if "schedule_enabled" in updates:
             updates["schedule_enabled"] = bool(updates["schedule_enabled"])
+        if "beam_enabled" in updates:
+            updates["beam_enabled"] = bool(updates["beam_enabled"])
         for key, fallback in (("schedule_start", "01:00"), ("schedule_stop", "07:00")):
             if key in updates:
                 value = str(updates.get(key) or "").strip()

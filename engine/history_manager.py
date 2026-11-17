@@ -10,6 +10,7 @@ import threading
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+from .provenance import sidecar_path
 
 
 class HistoryManager:
@@ -81,10 +82,14 @@ class HistoryManager:
             "format_label": entry.get("format_label", ""),
             "format_id": entry.get("format_id", ""),
             "audio_format": entry.get("audio_format", ""),
+            "start_time": entry.get("start_time"),
+            "end_time": entry.get("end_time"),
             "is_audio": entry.get("is_audio", False),
             "thumbnail": entry.get("thumbnail", ""),
             "status": entry.get("status", "completed"), # completed, failed
             "error": entry.get("error", None),
+            "sha256": entry.get("sha256", ""),
+            "provenance_path": entry.get("provenance_path", ""),
             "created_at": entry.get("created_at", int(time.time())),
             "created_at_str": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(entry.get("created_at", time.time()))),
         }
@@ -115,8 +120,23 @@ class HistoryManager:
                             os.remove(fp)
                         except Exception as e:
                             print(f"Error removing file {fp}: {e}")
+                    receipt = sidecar_path(fp) if fp else ""
+                    if receipt and os.path.exists(receipt):
+                        try:
+                            os.remove(receipt)
+                        except Exception:
+                            pass
                 self._save()
                 return True
+        return False
+
+    def update_fields(self, entry_id: str, fields: Dict[str, Any]) -> bool:
+        with self._lock:
+            for item in self._history:
+                if item.get("id") == entry_id:
+                    item.update(fields)
+                    self._save()
+                    return True
         return False
 
     def clear_all(self):

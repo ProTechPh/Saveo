@@ -54,10 +54,50 @@ PLATFORM_PATTERNS = [
     (r'dailymotion\.com', 'Dailymotion'),
     (r'pinterest\.com', 'Pinterest'),
     (r'bandcamp\.com', 'Bandcamp'),
-    (r'bilibili\.com', 'Bilibili'),
+    (r'bilibili\.com|bilibili\.tv', 'Bilibili'),
     (r'threads\.net', 'Threads'),
     (r'bluesky\.app|bsky\.app', 'Bluesky'),
 ]
+
+
+class _YtdlpLogger:
+    """Capture yt-dlp logs instead of dumping raw ERROR lines into the console."""
+
+    def __init__(self):
+        self.errors = []
+
+    def debug(self, message):
+        pass
+
+    def info(self, message):
+        pass
+
+    def warning(self, message):
+        pass
+
+    def error(self, message):
+        text = str(message).strip()
+        if text and text not in self.errors:
+            self.errors.append(text)
+            if len(self.errors) > 20:
+                self.errors.pop(0)
+
+
+def _is_transient_error(raw_err: str) -> bool:
+    """Only retry failures that a second attempt can plausibly fix."""
+    err = str(raw_err).lower()
+    permanent_markers = (
+        "registered users", "biliintl", "private video", "sign in", "login",
+        "drm", "protected", "unsupported url", "video is unavailable", "not available",
+        "extracted extension", "unusual and will be skipped",
+    )
+    if any(marker in err for marker in permanent_markers):
+        return False
+    transient_markers = (
+        "403", "429", "timed out", "timeout", "connection", "handshake",
+        "temporarily", "try again", "502", "503", "504", "reset by peer", "unreachable",
+    )
+    return any(marker in err for marker in transient_markers)
 
 
 def humanize_error(raw_err: str) -> Dict[str, str]:
@@ -82,6 +122,18 @@ def humanize_error(raw_err: str) -> Dict[str, str]:
         return {
             "friendly": "YouTube anti-bot verification challenge triggered.",
             "suggestion": "YouTube is challenging automated requests from this network. Add your browser cookies (cookies.txt) in Saveo Settings or place it into ~/.saveo/cookies.txt to bypass this check.",
+            "technical": str(raw_err)
+        }
+    if "biliintl" in err or "only available for registered users" in err:
+        return {
+            "friendly": "This Bilibili video requires a signed-in account.",
+            "suggestion": "Bilibili is refusing anonymous access. Open Saveo Settings and use Browser Session Extraction while signed in, or import a cookies.txt file, then retry this link.",
+            "technical": str(raw_err)
+        }
+    if "extracted extension" in err or "unusual and will be skipped" in err:
+        return {
+            "friendly": "The source returned a web page instead of a downloadable media stream.",
+            "suggestion": "This usually means the link needs a signed-in session or is not the actual media page. Add cookies in Settings, or open the page in your browser and copy the direct media link.",
             "technical": str(raw_err)
         }
     if "video is unavailable" in err or "this video is unavailable" in err or "unavailable" in err:
@@ -355,6 +407,7 @@ class YtDlpProvider(BaseProvider):
         opts: Dict[str, Any] = {
             'quiet': True,
             'no_warnings': True,
+            'logger': _YtdlpLogger(),
             'extract_flat': 'in_playlist' if is_playlist else False,
             'skip_download': True,
             'socket_timeout': 15,
@@ -390,7 +443,8 @@ class YtDlpProvider(BaseProvider):
         last_error = None
         ytdlp_mod = get_yt_dlp()
 
-        # Robust extraction with automatic 1-second retry on transient 403 or handshake stalls
+        # Robust extraction with automatic retry only on transient 403 / handshake stalls
+        logger = opts.get('logger')
         for attempt in range(2):
             try:
                 with ytdlp_mod.YoutubeDL(opts) as ydl:
@@ -399,11 +453,15 @@ class YtDlpProvider(BaseProvider):
                     break
             except Exception as e:
                 last_error = e
-                if attempt == 0:
+                if attempt == 0 and _is_transient_error(str(e)):
                     time.sleep(0.6)
                     continue
+                break
 
         if not info and last_error:
+            raw_error = str(last_error).strip()
+            if not raw_error and logger:
+                raw_error = "\n".join(logger.errors)
             # If single video extraction failed on a playlist URL, try playlist extraction fallback
             if not is_playlist and ("list=" in url or "playlist" in url):
                 try:
@@ -411,10 +469,10 @@ class YtDlpProvider(BaseProvider):
                     with ytdlp_mod.YoutubeDL(p_opts) as p_ydl:
                         info = p_ydl.extract_info(url, download=False)
                 except Exception:
-                    err_dict = humanize_error(str(last_error))
+                    err_dict = humanize_error(raw_error)
                     raise ValueError(f"{err_dict['friendly']}|SPLIT|{err_dict.get('suggestion', '')}|SPLIT|{err_dict['technical']}")
             else:
-                err_dict = humanize_error(str(last_error))
+                err_dict = humanize_error(raw_error)
                 raise ValueError(f"{err_dict['friendly']}|SPLIT|{err_dict.get('suggestion', '')}|SPLIT|{err_dict['technical']}")
 
         if not info:
@@ -505,6 +563,7 @@ class YtDlpProvider(BaseProvider):
         parsed_video_formats = self._parse_video_formats(raw_formats, duration)
         parsed_audio_formats = self._parse_audio_formats(raw_formats, duration)
         advanced_formats = self._parse_advanced_formats(raw_formats)
+        chapters = self._parse_chapters(info)
 
         return MediaMetadata(
             id=str(info.get('id', 'media')),
@@ -520,6 +579,7 @@ class YtDlpProvider(BaseProvider):
             formats=parsed_video_formats,
             audio_formats=parsed_audio_formats,
             advanced_formats=advanced_formats,
+            chapters=chapters,
             webpage_url=info.get('webpage_url', url),
             original_url=url,
             is_playlist=False,
@@ -576,6 +636,8 @@ class YtDlpProvider(BaseProvider):
             vcodec = f.get('vcodec') or ''
             if vcodec == 'none':
                 continue  # audio only
+            if (f.get('ext') or '').lower() in ('html', 'mhtml'):
+                continue  # web pages are not media streams
             has_any_video = True
             h = f.get('height')
             if not h or not isinstance(h, (int, float)):
@@ -726,6 +788,26 @@ class YtDlpProvider(BaseProvider):
 
         return video_formats
 
+    def _parse_chapters(self, info: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Normalize source chapters for the clip picker."""
+        chapters = []
+        for index, chapter in enumerate(info.get('chapters') or []):
+            try:
+                start = float(chapter.get('start_time'))
+            except (TypeError, ValueError):
+                continue
+            end = chapter.get('end_time')
+            try:
+                end = float(end) if end is not None else None
+            except (TypeError, ValueError):
+                end = None
+            chapters.append({
+                "title": str(chapter.get('title') or f"Chapter {index + 1}"),
+                "start_time": max(0.0, start),
+                "end_time": end,
+            })
+        return chapters
+
     def _parse_advanced_formats(self, raw_formats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Expose exact video streams (codec, fps, HDR, bitrate, container) for advanced users."""
         items = []
@@ -736,6 +818,8 @@ class YtDlpProvider(BaseProvider):
                 continue
             vcodec = (f.get('vcodec') or '').lower()
             if vcodec in ('', 'none'):
+                continue
+            if (f.get('ext') or '').lower() in ('html', 'mhtml'):
                 continue
             note = str(f.get('format_note') or '')
             if 'storyboard' in note.lower():
@@ -908,7 +992,9 @@ class YtDlpProvider(BaseProvider):
         audio_format: str,
         on_progress: Callable[[Dict[str, Any]], None],
         cancel_check: Callable[[], bool],
-        title: str = ""
+        title: str = "",
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None
     ) -> Dict[str, Any]:
         os.makedirs(output_dir, exist_ok=True)
         final_file_info = {}
@@ -996,6 +1082,7 @@ class YtDlpProvider(BaseProvider):
             'outtmpl': outtmpl,
             'quiet': True,
             'no_warnings': True,
+            'logger': _YtdlpLogger(),
             'noplaylist': True,
             'socket_timeout': 15,
             'retries': 5,
@@ -1047,6 +1134,16 @@ class YtDlpProvider(BaseProvider):
         has_ffmpeg = bool(self.ffmpeg_path and os.path.exists(self.ffmpeg_path))
         if has_ffmpeg:
             ydl_opts['ffmpeg_location'] = self.ffmpeg_path
+
+        if start_time is not None or end_time is not None:
+            if not has_ffmpeg:
+                raise Exception("Chapter clips require FFmpeg to be available.")
+            clip_start = max(0.0, float(start_time or 0.0))
+            clip_end = float(end_time) if end_time is not None else None
+            ydl_opts['download_ranges'] = lambda info_dict, ydl: [
+                (clip_start, clip_end if clip_end is not None else info_dict.get('duration'))
+            ]
+            ydl_opts['force_keyframes_at_cuts'] = True
 
         if is_audio:
             target_codec = audio_format.lower() if audio_format else "mp3"
@@ -1158,7 +1255,9 @@ class YtDlpProvider(BaseProvider):
             cleanup_task_files()
             if cancelled:
                 raise Exception("Download cancelled by user.")
-            err_dict = humanize_error(str(e))
+            logger = ydl_opts.get('logger')
+            raw_error = str(e).strip() or ("\n".join(logger.errors) if logger else "")
+            err_dict = humanize_error(raw_error)
             raise ValueError(f"{err_dict['friendly']}|SPLIT|{err_dict.get('suggestion', '')}|SPLIT|{err_dict['technical']}")
 
         # Determine output file path

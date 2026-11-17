@@ -23,11 +23,11 @@ root_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(root_dir))
 
 from engine.providers.registry import registry
-from engine.providers.ytdlp_provider import humanize_error, YtDlpProvider, _mp4_duration_seconds
+from engine.providers.ytdlp_provider import humanize_error, YtDlpProvider, _mp4_duration_seconds, _is_transient_error
 from engine.file_manager import sanitize_filename, apply_filename_template, get_unique_filename, format_bytes, format_seconds
 from engine.settings_manager import SettingsManager
 from engine.history_manager import HistoryManager
-from engine.queue_manager import QueueManager, DownloadTask
+from engine.queue_manager import QueueManager, DownloadTask, queue_manager
 
 
 class TestSaveoCore(unittest.TestCase):
@@ -46,6 +46,7 @@ class TestSaveoCore(unittest.TestCase):
             ("https://x.com/OpenAI/status/123456789", True, "Twitter / X"),
             ("https://twitter.com/user/status/123", True, "Twitter / X"),
             ("https://www.tiktok.com/@user/video/123456", True, "TikTok"),
+            ("https://www.bilibili.tv/en/video/123456", True, "Bilibili"),
             ("https://www.reddit.com/r/videos/comments/xyz", True, "Reddit"),
             ("https://vimeo.com/76979871", True, "Vimeo"),
             ("https://soundcloud.com/artist/track", True, "SoundCloud"),
@@ -120,6 +121,22 @@ class TestSaveoCore(unittest.TestCase):
         self.assertFalse(task.is_paused())
         self.assertEqual(task.status, "cancelled")
 
+    def test_chapters_are_normalized(self):
+        """Source chapters become title + start/end entries for the clip picker."""
+        provider = YtDlpProvider()
+        chapters = provider._parse_chapters({
+            "chapters": [
+                {"start_time": 0, "end_time": 61.5, "title": "Intro"},
+                {"start_time": 61.5, "title": ""},
+                {"title": "Missing start"},
+            ]
+        })
+        self.assertEqual(len(chapters), 2)
+        self.assertEqual(chapters[0]["title"], "Intro")
+        self.assertEqual(chapters[0]["end_time"], 61.5)
+        self.assertEqual(chapters[1]["title"], "Chapter 2")
+        self.assertIsNone(chapters[1]["end_time"])
+
     def test_advanced_video_formats(self):
         """Exact streams are exposed for the advanced picker, video-only flagged."""
         provider = YtDlpProvider()
@@ -169,6 +186,13 @@ class TestSaveoCore(unittest.TestCase):
         err_bot = humanize_error("Sign in to confirm you're not a bot. Use --cookies-from-browser or --cookies")
         self.assertIn("bot", err_bot["friendly"].lower())
         self.assertIn("cookies", err_bot["suggestion"].lower())
+
+        err_bili = humanize_error("[BiliIntl] This video is only available for registered users.")
+        self.assertIn("bilibili", err_bili["friendly"].lower())
+        self.assertIn("cookies", err_bili["suggestion"].lower())
+
+        err_html = humanize_error("The extracted extension ('html') is unusual and will be skipped")
+        self.assertIn("web page", err_html["friendly"].lower())
 
         err_unavail = humanize_error("ERROR: [youtube] 0W3QSijwJOO: This video is unavailable")
         self.assertIn("unavailable", err_unavail["friendly"].lower())
@@ -306,6 +330,28 @@ class TestSaveoCore(unittest.TestCase):
         self.assertIsNotNone(duplicate)
         self.assertEqual(duplicate["duplicate_source"], "queue")
 
+    def test_provenance_sidecar_written(self):
+        """Completed downloads write a hash receipt next to the media file."""
+        media = Path(self.temp_dir) / "provenance.mp4"
+        media.write_bytes(b"saveo provenance")
+        task = DownloadTask(
+            url="https://example.com/provenance",
+            title="Provenance",
+            output_dir=self.temp_dir,
+            format_label="1080p FHD • MP4",
+        )
+        task.file_path = str(media)
+        task.file_size = media.stat().st_size
+
+        queue_manager._finalize_provenance(task)
+
+        receipt = Path(f"{media}.saveo.json")
+        self.assertTrue(receipt.exists())
+        import json
+        data = json.loads(receipt.read_text(encoding="utf-8"))
+        self.assertEqual(data["source_url"], "https://example.com/provenance")
+        self.assertEqual(len(data["sha256"]), 64)
+
     def test_queue_task_lifecycle(self):
         """Test queue task state changes, cancellation and retrying."""
         qm = QueueManager()
@@ -328,6 +374,14 @@ class TestSaveoCore(unittest.TestCase):
         # Remove task
         qm.remove_task(task.id)
         self.assertIsNone(qm.get_task(task.id))
+
+    def test_transient_error_classification(self):
+        """Auth/HTML failures should not be retried (they double the console noise)."""
+        self.assertFalse(_is_transient_error("[BiliIntl] only available for registered users"))
+        self.assertFalse(_is_transient_error("The extracted extension ('html') is unusual"))
+        self.assertFalse(_is_transient_error("Private video. Sign in"))
+        self.assertTrue(_is_transient_error("HTTP Error 403: Forbidden"))
+        self.assertTrue(_is_transient_error("Connection timed out"))
 
     def test_mp4_mvhd_duration_parsing(self):
         """Instagram reels omit duration, so it is read from the MP4 mvhd atom."""

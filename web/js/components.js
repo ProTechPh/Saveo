@@ -146,6 +146,105 @@ const Components = {
     });
   },
 
+  // Render subtitle search results with a one-click clip action.
+  renderTranscriptResults(results, onClip) {
+    const container = document.getElementById('transcript-results');
+    if (!container) return;
+
+    container.innerHTML = '';
+    if (!results || results.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'transcript-empty';
+      empty.textContent = 'No subtitle matches. Download subtitles first, or try another phrase.';
+      container.appendChild(empty);
+      return;
+    }
+
+    results.forEach((result) => {
+      const row = document.createElement('div');
+      row.className = 'transcript-result';
+
+      const time = document.createElement('span');
+      time.className = 'transcript-time';
+      time.textContent = this.formatSeconds(result.start);
+
+      const info = document.createElement('div');
+      info.className = 'transcript-info';
+      const title = document.createElement('div');
+      title.className = 'transcript-title';
+      title.textContent = result.title || 'Downloaded media';
+      const snippet = document.createElement('div');
+      snippet.className = 'transcript-snippet';
+      snippet.textContent = result.text || '';
+      info.appendChild(title);
+      info.appendChild(snippet);
+
+      const clipBtn = document.createElement('button');
+      clipBtn.type = 'button';
+      clipBtn.className = 'secondary-btn btn-sm';
+      clipBtn.textContent = 'Clip';
+      clipBtn.title = 'Download this moment as a clip';
+      clipBtn.addEventListener('click', () => onClip(result));
+
+      row.appendChild(time);
+      row.appendChild(info);
+      row.appendChild(clipBtn);
+      container.appendChild(row);
+    });
+  },
+
+  // Render chapter list for one-shot clip downloads.
+  renderChapters(chapters, onSelect) {
+    const wrap = document.getElementById('chapters-wrap');
+    const list = document.getElementById('chapters-list');
+    const selectedRow = document.getElementById('selected-clip-row');
+    const selectedLabel = document.getElementById('selected-clip-label');
+    const clearBtn = document.getElementById('btn-clear-clip');
+    if (!wrap || !list) return;
+
+    list.innerHTML = '';
+    if (selectedRow) selectedRow.style.display = 'none';
+    if (selectedLabel) selectedLabel.textContent = '';
+
+    const clearSelection = () => {
+      list.querySelectorAll('.chapter-row').forEach(row => row.classList.remove('selected'));
+      if (selectedRow) selectedRow.style.display = 'none';
+      if (selectedLabel) selectedLabel.textContent = '';
+      onSelect(null);
+    };
+    if (clearBtn) clearBtn.onclick = clearSelection;
+
+    if (!chapters || chapters.length === 0) {
+      wrap.style.display = 'none';
+      return;
+    }
+
+    wrap.style.display = 'block';
+    chapters.forEach((chapter, index) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'chapter-row';
+
+      const title = document.createElement('span');
+      title.textContent = chapter.title || `Chapter ${index + 1}`;
+      const time = document.createElement('span');
+      time.className = 'chapter-time';
+      const endLabel = chapter.end_time != null ? this.formatSeconds(chapter.end_time) : 'end';
+      time.textContent = `${this.formatSeconds(chapter.start_time)}–${endLabel}`;
+
+      row.appendChild(title);
+      row.appendChild(time);
+      row.addEventListener('click', () => {
+        list.querySelectorAll('.chapter-row').forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        if (selectedRow) selectedRow.style.display = 'flex';
+        if (selectedLabel) selectedLabel.textContent = `${title.textContent} (${time.textContent})`;
+        onSelect({ ...chapter, title: title.textContent });
+      });
+      list.appendChild(row);
+    });
+  },
+
   // Render exact source streams for advanced users.
   renderAdvancedFormats(formats, onSelect) {
     const wrap = document.getElementById('advanced-formats-wrap');
@@ -553,13 +652,18 @@ const Components = {
           </button>
         ` : ''}
         ${sourceUrl ? `
-          <button class="icon-btn" data-action="redownload" data-url="${safeUrl}" data-format="${safeFormatId}" data-format-label="${safeFormat}" data-audio="${isAudio ? '1' : '0'}" data-audio-format="${safeAudioFormat}" data-title="${this.escapeAttr(mediaTitle)}" data-thumb="${this.escapeAttr(originalThumb)}" title="Download again">
+          <button class="icon-btn" data-action="redownload" data-url="${safeUrl}" data-format="${safeFormatId}" data-format-label="${safeFormat}" data-audio="${isAudio ? '1' : '0'}" data-audio-format="${safeAudioFormat}" data-title="${this.escapeAttr(mediaTitle)}" data-thumb="${this.escapeAttr(originalThumb)}" data-start="${item.start_time != null ? this.escapeAttr(item.start_time) : ''}" data-end="${item.end_time != null ? this.escapeAttr(item.end_time) : ''}" title="Download again">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
           </button>
         ` : ''}
         ${canDeleteFile && filePath ? `
           <button class="icon-btn-trash" data-action="delete-file" data-id="${safeId}" title="Delete file from disk">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        ` : ''}
+        ${canDeleteFile && filePath ? `
+          <button class="icon-btn" data-action="verify" data-id="${safeId}" title="Verify file integrity">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
           </button>
         ` : ''}
         <button class="icon-btn" data-action="delete-hist" data-id="${safeId}" title="Remove record from history">

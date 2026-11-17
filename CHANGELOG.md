@@ -22,9 +22,19 @@ All notable changes to Saveo will be documented in this file.
   - Embed title/author metadata and cover art where FFmpeg supports the container.
   - Advanced format picker: choose the exact codec, frame rate, HDR, bitrate, and container; video-only streams are paired with the best audio.
   - Playlist tools: filter long lists by title, shift-click to select a range, select only visible matches, and reverse the download order.
+- **Saveo Labs (new local-first tools):**
+  - **Watchlist / Auto-Capture:** save a channel, playlist, or album and check it hourly; only new items are queued, with max-item and minimum-duration filters.
+  - **Saveo Cast:** a token-protected local RSS podcast feed and M3U playlist for downloaded audio, ready for a local podcast app.
+  - **Chapter clips:** videos with chapters get a picker; download a single chapter as its own named file.
+  - **Provenance Vault:** each completed file gets a `.saveo.json` receipt with source URL, format, and SHA-256; verify from the Library or export a manifest.
+  - **Saveo Beam (experimental):** opt-in LAN page for sending a link from a phone to this PC.
+  - **Transcript search:** search downloaded subtitle sidecars and turn a match into a clip.
 - **Network & input:**
   - Optional bandwidth limit (KB/s) and parallel-fragment downloads for the desktop engine.
   - Drag and drop one link into the input, or several links into the batch drawer.
+- **Error handling:**
+  - Bilibili.tv / BiliIntl “registered users” failures now explain that cookies/sign-in are required instead of showing a raw yt-dlp trace.
+  - Permanent failures (auth, private, HTML-page responses) are no longer retried, and raw yt-dlp errors are captured for the UI instead of spamming the console.
 - **Runtime safety:**
   - Single-instance guard: launching Saveo again focuses the existing window instead of starting a second engine (and a second writer for queue/settings/history).
   - Off-peak scheduling: queued downloads wait outside a configurable local-time window; active downloads are not interrupted.

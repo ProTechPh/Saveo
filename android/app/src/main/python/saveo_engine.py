@@ -306,6 +306,18 @@ def humanize_error(raw_err: str) -> Dict[str, str]:
             "suggestion": "Place a cookies.txt file into Download/Saveo/cookies.txt to bypass this check.",
             "technical": str(raw_err)
         }
+    if "biliintl" in err or "only available for registered users" in err:
+        return {
+            "friendly": "This Bilibili video requires a signed-in account.",
+            "suggestion": "Place a signed-in cookies.txt in Download/Saveo/cookies.txt and try again.",
+            "technical": str(raw_err)
+        }
+    if "extracted extension" in err or "unusual and will be skipped" in err:
+        return {
+            "friendly": "The source returned a web page instead of a media stream.",
+            "suggestion": "Open the page in your browser and use the actual media link, or add cookies.txt.",
+            "technical": str(raw_err)
+        }
     if "video is unavailable" in err or "unavailable" in err:
         return {
             "friendly": "This media is unavailable or has been restricted.",
@@ -1049,7 +1061,6 @@ def download_media(url: str, format_id: str, is_audio: bool, audio_format: str, 
             }))
         return json.dumps({"status": "paused"})
     except Exception as e:
-        global _is_paused
         if _is_paused or "paused" in str(e).lower():
             if callback_obj:
                 callback_obj.onProgress(json.dumps({

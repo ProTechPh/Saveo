@@ -132,6 +132,12 @@ Smart error detection identifies country-level ISP blocks and geo-restrictions, 
 - **Drag-and-drop links:** Drop one link into the input, or a list of links into the batch drawer.
 - **Single-instance guard:** Opening Saveo again focuses the existing window instead of starting a second engine.
 - **Off-peak scheduling:** Queued downloads can wait for a local-time window while active downloads keep running.
+- **Watchlist:** Save a channel, playlist, or album and let Saveo queue only new items while it runs.
+- **Saveo Cast:** A local, token-protected RSS feed or M3U playlist for downloaded audio, ready for a podcast app.
+- **Chapter clips:** Pick a chapter and download just that segment as its own named file.
+- **Provenance Vault:** Every completed file gets a SHA-256 receipt; verify it from the Library or export a manifest.
+- **Transcript search:** Search downloaded subtitles and turn a match into a clip.
+- **Saveo Beam (experimental):** Send a media link from a phone on the same Wi-Fi to this PC.
 - **In-app updates:** Check for new Saveo releases and view release notes directly inside the application.
 - **Engine maintenance:** Update the embedded yt-dlp core engine from within the application with a single click.
 - **Dynamic version synchronization:** Keeps the displayed application version synchronized with release tags.
@@ -370,8 +376,9 @@ Saveo is an open-source utility designed for personal archival, educational, and
 
 ### 🛡️ Security & Privacy Architecture
 
-- **Localhost-Only Binding:** Backend server strictly binds to `127.0.0.1`, ignoring external network interfaces.
-- **Dynamic Authentication Token:** All `/api/*` and WebSocket endpoints require a cryptographic `X-Auth-Token` generated at startup to prevent unauthorized local script or browser tab access.
+- **Localhost-Only Binding:** The main backend server binds to `127.0.0.1`; only the opt-in Saveo Beam page listens on the local network.
+- **Saveo Beam (opt-in):** Disabled by default. When enabled it serves a token-protected page on port 8767 that can only enqueue media links, never read or list files.
+- **Dynamic Authentication Token:** All `/api/*` and WebSocket endpoints require a cryptographic `X-Auth-Token` generated at startup to prevent unauthorized local script or browser tab access. The public `Saveo Cast` feed/media routes use a separate scoped feed token.
 - **Cross-Site Attack Protection:** Requests with external `Origin` headers or `Sec-Fetch-Site: cross-site` are blocked with `403 Forbidden`.
 - **Command Injection Prevention:** File launch and directory inspection calls use `os.startfile()` and token-safe `explorer.exe` process arguments without shell expansion (`shell=False`).
 - **Path Traversal Guards:** Strict containment checks ensure all disk operations and file retrieval requests are confined within user-authorized directories.

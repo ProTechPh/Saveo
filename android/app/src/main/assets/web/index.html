@@ -39,6 +39,13 @@
           </svg>
           <span>Downloader</span>
         </button>
+        <button class="nav-tab" data-tab="watchlist" id="tab-btn-watchlist">
+          <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          <span>Watchlist</span>
+        </button>
         <button class="nav-tab" data-tab="history" id="tab-btn-history">
           <svg class="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 3v5h5"></path>
@@ -312,6 +319,16 @@
                   </div>
                 </div>
 
+                <!-- CHAPTERS / CLIP -->
+                <div class="chapters-wrap" id="chapters-wrap" style="display: none;">
+                  <label class="section-label">Chapters / Clip</label>
+                  <div class="chapters-list" id="chapters-list"></div>
+                  <div class="selected-clip-row" id="selected-clip-row" style="display: none;">
+                    <span>Clip: <strong id="selected-clip-label"></strong></span>
+                    <button type="button" class="text-link-btn" id="btn-clear-clip">Clear</button>
+                  </div>
+                </div>
+
                 <!-- ESTIMATED DOWNLOAD SIZE BANNER -->
                 <div class="saveo-size-banner" id="saveo-size-banner">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -468,6 +485,59 @@
       </section>
 
 
+      <!-- ================= TAB 2: WATCHLIST ================= -->
+      <section class="tab-pane" id="pane-watchlist">
+        <div class="pane-content-single">
+          <div class="input-saveo-card">
+            <div class="saveo-input-bar">
+              <div class="saveo-input-prefix">
+                <svg class="saveo-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </div>
+              <input type="text" id="watch-url-input" class="saveo-input-field" placeholder="Channel, playlist, or album URL..." autocomplete="off" spellcheck="false" />
+              <div class="saveo-bar-actions">
+                <select id="watch-quality" class="custom-select" style="height: 30px; font-size: 12px;">
+                  <option value="best">Best Quality</option>
+                  <option value="2160p">4K 2160p</option>
+                  <option value="1440p">2K 1440p</option>
+                  <option value="1080p">1080p FHD</option>
+                  <option value="720p">720p HD</option>
+                  <option value="480p">480p SD</option>
+                  <option value="audio_mp3">Audio (MP3)</option>
+                  <option value="audio_m4a">Audio (M4A)</option>
+                </select>
+                <button class="saveo-fetch-btn" id="btn-watch-add">Add</button>
+              </div>
+            </div>
+
+            <div class="watchlist-options">
+              <input type="text" id="watch-folder" class="text-input" placeholder="Folder (optional)" maxlength="120" />
+              <input type="number" id="watch-max-items" class="text-input" min="1" max="50" value="10" title="Max new items per check" />
+              <input type="number" id="watch-min-duration" class="text-input" min="0" value="0" title="Skip items shorter than this many seconds" />
+              <input type="text" id="watch-include" class="text-input" placeholder="Title contains (optional)" maxlength="120" />
+              <input type="text" id="watch-exclude" class="text-input" placeholder="Title excludes (optional)" maxlength="120" />
+            </div>
+
+            <div class="saveo-platforms-row">
+              <div class="saveo-platform-chips">
+                <span class="platform-chip">Checked hourly while Saveo is open</span>
+                <span class="platform-chip">Only new items are queued</span>
+                <span class="platform-chip">Duplicate-aware</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="watchlist-toolbar">
+            <h3 class="recent-title">My Watchlist</h3>
+            <button class="subtle-link-btn" id="btn-watch-check-all">Check All</button>
+          </div>
+          <div class="watchlist-list" id="watchlist-items"></div>
+        </div>
+      </section>
+
+
       <!-- ================= TAB 3: LIBRARY & HISTORY ================= -->
       <section class="tab-pane" id="pane-history">
         <div class="pane-content-history">
@@ -507,6 +577,10 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
                 <span>Open Folder</span>
               </button>
+              <button class="secondary-btn btn-sm" id="btn-export-manifest">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <span>Export Manifest</span>
+              </button>
               <button class="secondary-btn btn-sm danger" id="btn-hist-clear">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 <span>Clear History</span>
@@ -518,6 +592,18 @@
           <div class="empty-state" id="history-empty-state" style="display: none;">
             <h4>No downloads yet</h4>
             <p>Files you download will be listed here with their size, format and date.</p>
+          </div>
+
+          <!-- TRANSCRIPT SEARCH -->
+          <div class="transcript-search-block">
+            <div class="history-search-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input type="text" id="transcript-search-input" placeholder="Search inside downloaded subtitles (.srt / .vtt)..." />
+            </div>
+            <div class="transcript-results" id="transcript-results"></div>
           </div>
 
           <!-- HISTORY ITEMS CONTAINER -->
@@ -819,6 +905,47 @@
                 </button>
               </div>
 
+            </div>
+          </div>
+
+          <!-- SAVEO CAST / LOCAL PODCAST FEED -->
+          <div class="diagnostics-card" id="cast-card">
+            <h3>Saveo Cast — Local Podcast Feed</h3>
+            <p>
+              Subscribe from a podcast app on this PC to the audio in your library. The feed is local and protected by a per-library token.
+            </p>
+            <div class="dir-setting-control" style="margin-top: 8px;">
+              <input type="text" id="cast-feed-url" class="text-input" readonly placeholder="Podcast feed URL" />
+              <button class="secondary-btn" id="btn-copy-cast-feed">Copy</button>
+            </div>
+            <div class="dir-setting-control" style="margin-top: 6px;">
+              <input type="text" id="cast-m3u-url" class="text-input" readonly placeholder="M3U playlist URL" />
+              <button class="secondary-btn" id="btn-copy-cast-m3u">Copy</button>
+            </div>
+          </div>
+
+          <!-- SAVEO BEAM / PHONE HANDOFF -->
+          <div class="diagnostics-card" id="beam-card">
+            <h3>Saveo Beam — Send from Phone</h3>
+            <p>
+              Enable Beam, then open the link below on a phone or tablet connected to the same Wi-Fi. The page queues a link on this PC.
+              Anyone with the link can queue downloads while Beam is enabled.
+            </p>
+            <div class="setting-item setting-item-toggle" style="border-bottom: 0; padding-top: 6px;">
+              <div class="setting-info">
+                <label>Enable Saveo Beam</label>
+                <span>Experimental: starts a small LAN-only page on port 8767.</span>
+              </div>
+              <div class="setting-control">
+                <label class="toggle-switch">
+                  <input type="checkbox" id="setting-beam-enabled" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+            <div class="dir-setting-control" style="margin-top: 4px;">
+              <input type="text" id="beam-url" class="text-input" readonly placeholder="Enable Beam and save preferences to get a link" />
+              <button class="secondary-btn" id="btn-copy-beam">Copy</button>
             </div>
           </div>
 

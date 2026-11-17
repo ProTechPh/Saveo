@@ -9,9 +9,11 @@ class SaveoApp {
     this.currentMedia = null;
     this.selectedMode = 'video'; // 'video' or 'audio'
     this.selectedFormat = null;
+    this.selectedClip = null;
     this.activeSingleTaskId = null;
     this.tasks = [];
     this.settings = {};
+    this.watchlistItems = [];
 
     this.init();
   }
@@ -19,6 +21,7 @@ class SaveoApp {
   async init() {
     try { this.setupTabs(); } catch (e) { console.error("Setup tabs error:", e); }
     try { this.setupDownloader(); } catch (e) { console.error("Setup downloader error:", e); }
+    try { this.setupWatchlist(); } catch (e) { console.error("Setup watchlist error:", e); }
     try { this.setupHistory(); } catch (e) { console.error("Setup history error:", e); }
     try { this.setupSettings(); } catch (e) { console.error("Setup settings error:", e); }
     try { this.setupUpdateSystem(); } catch (e) { console.error("Setup update system error:", e); }
@@ -26,6 +29,8 @@ class SaveoApp {
 
     // Load initial data safely
     try { await this.loadSettings(); } catch (e) { console.error("Error loading settings:", e); }
+    try { await this.setupCast(); } catch (e) { console.error("Error loading cast info:", e); }
+    try { await this.loadBeamInfo(); } catch (e) { console.error("Error loading beam info:", e); }
     try { await this.loadSystemStatus(); } catch (e) { console.error("Error loading system status:", e); }
     try { await this.loadTasks(); } catch (e) { console.error("Error loading tasks:", e); }
     try { await this.loadHistory(); } catch (e) { console.error("Error loading history:", e); }
@@ -119,6 +124,8 @@ class SaveoApp {
 
     if (tabName === 'history') {
       this.loadHistory();
+    } else if (tabName === 'watchlist') {
+      this.loadWatchlist();
     } else if (tabName === 'settings') {
       this.loadSettings();
     }
@@ -148,6 +155,249 @@ class SaveoApp {
         <span class="btn-text">Analyze</span>
       `;
     }
+  }
+
+  // ================= SAVEO CAST =================
+  async setupCast() {
+    const card = document.getElementById('cast-card');
+    if (!card) return;
+    if (typeof window.SaveoAndroid !== 'undefined') {
+      card.style.display = 'none';
+      return;
+    }
+    try {
+      const info = await api.getCastInfo();
+      const feedInput = document.getElementById('cast-feed-url');
+      const m3uInput = document.getElementById('cast-m3u-url');
+      const origin = window.location.origin;
+      const feedUrl = info && info.feed_path ? `${origin}${info.feed_path}` : '';
+      const m3uUrl = info && info.m3u_path ? `${origin}${info.m3u_path}` : '';
+      if (!feedUrl) {
+        card.style.display = 'none';
+        return;
+      }
+      if (feedInput) feedInput.value = feedUrl;
+      if (m3uInput) m3uInput.value = m3uUrl;
+
+      const copy = (value, label) => {
+        if (!navigator.clipboard || !navigator.clipboard.writeText) {
+          Components.showToast('Clipboard is unavailable.', 'error');
+          return;
+        }
+        navigator.clipboard.writeText(value).then(
+          () => Components.showToast(`${label} copied.`, 'success'),
+          () => Components.showToast('Could not copy.', 'error')
+        );
+      };
+      const btnFeed = document.getElementById('btn-copy-cast-feed');
+      if (btnFeed) btnFeed.addEventListener('click', () => copy(feedUrl, 'Podcast feed URL'));
+      const btnM3u = document.getElementById('btn-copy-cast-m3u');
+      if (btnM3u) btnM3u.addEventListener('click', () => copy(m3uUrl, 'M3U URL'));
+    } catch (e) {
+      card.style.display = 'none';
+    }
+  }
+
+  // ================= SAVEO BEAM =================
+  async loadBeamInfo() {
+    const card = document.getElementById('beam-card');
+    const input = document.getElementById('beam-url');
+    if (!card || !input) return;
+    if (typeof window.SaveoAndroid !== 'undefined') {
+      card.style.display = 'none';
+      return;
+    }
+    try {
+      const info = await api.getBeamInfo();
+      const url = info && info.url ? info.url : '';
+      input.value = url;
+      const wanted = document.getElementById('setting-beam-enabled')
+        ? document.getElementById('setting-beam-enabled').checked
+        : Boolean(this.settings.beam_enabled);
+      input.placeholder = url
+        ? ''
+        : (wanted ? 'Beam could not start (is port 8767 in use?)' : 'Enable Beam and save preferences to get a link');
+      const btn = document.getElementById('btn-copy-beam');
+      if (btn) {
+        btn.onclick = () => {
+          if (!url) {
+            Components.showToast('Beam is not running.', 'info');
+            return;
+          }
+          if (!navigator.clipboard || !navigator.clipboard.writeText) {
+            Components.showToast('Clipboard is unavailable.', 'error');
+            return;
+          }
+          navigator.clipboard.writeText(url).then(
+            () => Components.showToast('Beam link copied.', 'success'),
+            () => Components.showToast('Could not copy.', 'error')
+          );
+        };
+      }
+    } catch (e) {
+      input.value = '';
+    }
+  }
+
+  // ================= WATCHLIST =================
+  setupWatchlist() {
+    const urlInput = document.getElementById('watch-url-input');
+    const btnAdd = document.getElementById('btn-watch-add');
+    const btnCheckAll = document.getElementById('btn-watch-check-all');
+    const list = document.getElementById('watchlist-items');
+
+    const addWatch = async () => {
+      const url = (urlInput ? urlInput.value : '').trim();
+      if (!url) {
+        Components.showToast('Paste a channel, playlist, or album URL first.', 'error');
+        if (urlInput) urlInput.focus();
+        return;
+      }
+      const payload = {
+        url,
+        quality: document.getElementById('watch-quality')?.value || 'best',
+        folder: (document.getElementById('watch-folder')?.value || '').trim(),
+        max_items: parseInt(document.getElementById('watch-max-items')?.value, 10) || 10,
+        min_duration: parseInt(document.getElementById('watch-min-duration')?.value, 10) || 0,
+        include: (document.getElementById('watch-include')?.value || '').trim(),
+        exclude: (document.getElementById('watch-exclude')?.value || '').trim()
+      };
+      try {
+        await api.addWatchlist(payload);
+        if (urlInput) urlInput.value = '';
+        await this.loadWatchlist();
+        Components.showToast('Added to watchlist.', 'success');
+      } catch (e) {
+        Components.showToast(`Could not add watch: ${e.message}`, 'error');
+      }
+    };
+
+    if (btnAdd) btnAdd.addEventListener('click', addWatch);
+    if (urlInput) {
+      urlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          addWatch();
+        }
+      });
+    }
+
+    if (btnCheckAll) {
+      btnCheckAll.addEventListener('click', async () => {
+        Components.showToast('Checking watchlist...', 'info');
+        try {
+          const res = await api.checkAllWatchlist();
+          const results = (res && res.results) || [];
+          const added = results.reduce((sum, item) => sum + (item.added || 0), 0);
+          Components.showToast(`Watchlist checked: ${added} new download(s).`, 'success');
+          await this.loadWatchlist();
+          await this.loadTasks();
+        } catch (e) {
+          Components.showToast(`Watchlist check failed: ${e.message}`, 'error');
+        }
+      });
+    }
+
+    if (list) {
+      list.addEventListener('click', async (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+        const id = target.getAttribute('data-id');
+        const action = target.getAttribute('data-action');
+        const item = (this.watchlistItems || []).find(entry => entry.id === id);
+        if (!item) return;
+
+        if (action === 'check') {
+          try {
+            const res = await api.checkWatchlistItem(id);
+            Components.showToast(`Checked: +${res.added || 0} new, ${res.skipped || 0} skipped.`, 'success');
+            await this.loadWatchlist();
+            await this.loadTasks();
+          } catch (err) {
+            Components.showToast(`Check failed: ${err.message}`, 'error');
+          }
+        } else if (action === 'toggle') {
+          try {
+            await api.toggleWatchlistItem(id, !item.enabled);
+            await this.loadWatchlist();
+          } catch (err) {
+            Components.showToast(`Could not update watch: ${err.message}`, 'error');
+          }
+        } else if (action === 'remove') {
+          if (!confirm('Remove this watchlist item? Downloaded files are kept.')) return;
+          try {
+            await api.removeWatchlist(id);
+            await this.loadWatchlist();
+            Components.showToast('Removed from watchlist.', 'info');
+          } catch (err) {
+            Components.showToast(`Could not remove watch: ${err.message}`, 'error');
+          }
+        }
+      });
+    }
+  }
+
+  async loadWatchlist() {
+    const container = document.getElementById('watchlist-items');
+    if (!container) return;
+    try {
+      const res = await api.getWatchlist();
+      this.watchlistItems = (res && res.items) || [];
+      this.renderWatchlist();
+    } catch (e) {
+      container.innerHTML = `<div class="watchlist-empty">Could not load watchlist: ${Components.escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  renderWatchlist() {
+    const container = document.getElementById('watchlist-items');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (!this.watchlistItems.length) {
+      container.innerHTML = `
+        <div class="watchlist-empty">
+          No watched sources yet. Add a channel or playlist URL above and Saveo will queue only new items.
+        </div>
+      `;
+      return;
+    }
+
+    this.watchlistItems.forEach(item => {
+      const card = document.createElement('div');
+      card.className = `watchlist-card${item.enabled === false ? ' paused' : ''}`;
+      const safeId = Components.escapeAttr(item.id || '');
+      const title = item.title || item.url || 'Watchlist item';
+      const safeTitle = Components.escapeHtml(title);
+      const safeUrl = Components.escapeHtml(item.url || '');
+      const safePlatform = Components.escapeHtml(item.platform || 'Media');
+      const folder = item.folder ? ` • ${Components.escapeHtml(item.folder)}` : '';
+      const lastChecked = item.last_checked
+        ? new Date(item.last_checked * 1000).toLocaleString()
+        : 'never';
+      const stats = `Last check: +${item.last_added || 0} new, ${item.last_skipped || 0} skipped • ${lastChecked}`;
+      const error = item.last_error
+        ? `<div class="watchlist-error">${Components.escapeHtml(item.last_error)}</div>`
+        : '';
+
+      card.innerHTML = `
+        <div class="watchlist-info">
+          <div class="watchlist-title" title="${Components.escapeAttr(title)}">${safeTitle}</div>
+          <div class="watchlist-meta">${safePlatform}${folder} • ${Components.escapeHtml(item.format_label || 'Best Quality')}</div>
+          <div class="watchlist-meta">${safeUrl}</div>
+          <div class="watchlist-stats">${stats}</div>
+          ${error}
+        </div>
+        <div class="watchlist-actions">
+          <button class="secondary-btn btn-sm" data-action="check" data-id="${safeId}">Check now</button>
+          <button class="secondary-btn btn-sm" data-action="toggle" data-id="${safeId}">${item.enabled === false ? 'Resume' : 'Pause'}</button>
+          <button class="icon-btn" data-action="remove" data-id="${safeId}" title="Remove from watchlist">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+          </button>
+        </div>
+      `;
+      container.appendChild(card);
+    });
   }
 
   // ================= UNIFIED DOWNLOADER =================
@@ -697,6 +947,7 @@ class SaveoApp {
     document.getElementById('analyze-error').style.display = 'none';
     this.currentMedia = null;
     this.selectedFormat = null;
+    this.selectedClip = null;
     this.activeSingleTaskId = null;
   }
 
@@ -849,6 +1100,12 @@ class SaveoApp {
         this.selectedFormat = fmt;
       });
 
+      // Chapter clips (desktop/web sources that expose chapters).
+      this.selectedClip = null;
+      Components.renderChapters(data.chapters || [], (chapter) => {
+        this.selectedClip = chapter;
+      });
+
       // Show preview card
       document.getElementById('media-card').style.display = 'block';
 
@@ -931,18 +1188,25 @@ class SaveoApp {
       + (advanced && !this.selectedFormat.has_audio ? ' + audio' : '');
     const audioCodec = isAudio && this.selectedFormat ? this.selectedFormat.ext : 'mp3';
     const outDir = document.getElementById('selected-save-dir').textContent.trim() || this.settings.download_dir;
+    const clip = this.selectedClip;
+    const clipSuffix = clip
+      ? ` • Clip ${Components.formatSeconds(clip.start_time)}-${clip.end_time != null ? Components.formatSeconds(clip.end_time) : 'end'}`
+      : '';
+    const downloadTitle = clip ? `${this.currentMedia.title} - ${clip.title}` : this.currentMedia.title;
 
     const payload = {
       url: this.currentMedia.url,
       format_id: formatId,
-      format_label: formatLabel,
+      format_label: `${formatLabel}${clipSuffix}`,
       is_audio: isAudio,
       audio_format: audioCodec,
       output_dir: outDir,
-      title: this.currentMedia.title,
+      title: downloadTitle,
       thumbnail: this.currentMedia.thumbnail,
       expected_size_str: this.selectedFormat ? (this.selectedFormat.filesize_str || '') : '',
-      expected_bytes: this.selectedFormat ? (this.selectedFormat.filesize_approx || 0) : 0
+      expected_bytes: this.selectedFormat ? (this.selectedFormat.filesize_approx || 0) : 0,
+      start_time: clip ? clip.start_time : null,
+      end_time: clip && clip.end_time != null ? clip.end_time : null
     };
 
     try {
@@ -1165,6 +1429,33 @@ class SaveoApp {
       });
     }
 
+    const transcriptInput = document.getElementById('transcript-search-input');
+    const transcriptResults = document.getElementById('transcript-results');
+    let transcriptTimer = null;
+    if (transcriptInput && transcriptResults) {
+      if (typeof window.SaveoAndroid !== 'undefined') {
+        const block = transcriptInput.closest('.transcript-search-block');
+        if (block) block.style.display = 'none';
+      }
+      transcriptInput.addEventListener('input', () => {
+        clearTimeout(transcriptTimer);
+        const query = transcriptInput.value.trim();
+        if (query.length < 2) {
+          transcriptResults.innerHTML = '';
+          return;
+        }
+        transcriptTimer = setTimeout(async () => {
+          try {
+            const results = await api.searchTranscripts(query);
+            Components.renderTranscriptResults(results, (result) => this.downloadTranscriptClip(result));
+          } catch (e) {
+            transcriptResults.innerHTML = '';
+            Components.showToast(`Subtitle search failed: ${e.message}`, 'error');
+          }
+        }, 300);
+      });
+    }
+
     if (btnOpenFolder) {
       btnOpenFolder.addEventListener('click', async () => {
         await api.openFolder(this.settings.download_dir);
@@ -1177,6 +1468,42 @@ class SaveoApp {
           await api.clearHistory();
           await this.loadHistory();
           Components.showToast('Download history cleared.', 'info');
+        }
+      });
+    }
+
+    const btnExportManifest = document.getElementById('btn-export-manifest');
+    if (btnExportManifest) {
+      btnExportManifest.addEventListener('click', async () => {
+        try {
+          const items = await api.getHistory();
+          const manifest = {
+            generated_at: new Date().toISOString(),
+            app: 'Saveo',
+            items: (items || []).map(item => ({
+              id: item.id,
+              title: item.title,
+              url: item.url,
+              filename: item.filename,
+              file_size: item.file_size,
+              format_label: item.format_label,
+              sha256: item.sha256 || '',
+              created_at_str: item.created_at_str || '',
+              provenance_path: item.provenance_path || ''
+            }))
+          };
+          const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = 'saveo-library-manifest.json';
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+          Components.showToast('Library manifest exported.', 'success');
+        } catch (e) {
+          Components.showToast(`Manifest export failed: ${e.message}`, 'error');
         }
       });
     }
@@ -1202,6 +1529,21 @@ class SaveoApp {
           if (card) card.remove();
           await this.loadHistory();
           Components.showToast('File deleted from disk.', 'info');
+        } else if (action === 'verify') {
+          try {
+            const result = await api.verifyHistoryItem(id);
+            if (result.status === 'verified') {
+              Components.showToast('Verified: the file hash matches the receipt.', 'success');
+            } else if (result.status === 'changed') {
+              Components.showToast('Warning: the file has changed since it was downloaded.', 'error');
+            } else if (result.status === 'missing') {
+              Components.showToast('File is missing from disk.', 'error');
+            } else {
+              Components.showToast('This file cannot be verified on this platform.', 'info');
+            }
+          } catch (e) {
+            Components.showToast(`Verification failed: ${e.message}`, 'error');
+          }
         } else if (action === 'redownload') {
           const url = target.getAttribute('data-url');
           if (!url) return;
@@ -1214,6 +1556,8 @@ class SaveoApp {
             output_dir: this.settings.download_dir,
             title: target.getAttribute('data-title') || '',
             thumbnail: target.getAttribute('data-thumb') || '',
+            start_time: target.getAttribute('data-start') !== '' ? parseFloat(target.getAttribute('data-start')) : null,
+            end_time: target.getAttribute('data-end') !== '' ? parseFloat(target.getAttribute('data-end')) : null,
             force: true
           });
           await this.loadTasks();
@@ -1226,6 +1570,32 @@ class SaveoApp {
           Components.showToast('Removed record from history.', 'info');
         }
       });
+    }
+  }
+
+  async downloadTranscriptClip(result) {
+    if (!result || !result.url) {
+      Components.showToast('This library item has no source URL for clipping.', 'error');
+      return;
+    }
+    try {
+      await api.startDownload({
+        url: result.url,
+        format_id: result.format_id || 'best',
+        format_label: `${result.format_label || 'Best Quality'} • Clip`,
+        is_audio: Boolean(result.is_audio),
+        audio_format: result.audio_format || 'mp3',
+        output_dir: this.settings.download_dir,
+        title: `${result.title} - clip ${Components.formatSeconds(result.start_time)}`,
+        thumbnail: result.thumbnail || '',
+        start_time: result.start_time,
+        end_time: result.end_time,
+        force: true
+      });
+      await this.loadTasks();
+      Components.showToast('Transcript clip queued.', 'success');
+    } catch (e) {
+      Components.showToast(`Could not queue clip: ${e.message}`, 'error');
     }
   }
 
@@ -1435,6 +1805,9 @@ class SaveoApp {
             : Boolean(this.settings.schedule_enabled),
           schedule_start: (document.getElementById('setting-schedule-start')?.value || this.settings.schedule_start || '01:00'),
           schedule_stop: (document.getElementById('setting-schedule-stop')?.value || this.settings.schedule_stop || '07:00'),
+          beam_enabled: document.getElementById('setting-beam-enabled')
+            ? document.getElementById('setting-beam-enabled').checked
+            : Boolean(this.settings.beam_enabled),
           notifications: notif ? notif.checked : (this.settings.notifications !== false),
           skip_duplicates: document.getElementById('setting-skip-duplicates')
             ? document.getElementById('setting-skip-duplicates').checked
@@ -1453,6 +1826,7 @@ class SaveoApp {
           }
           Components.showToast('Preferences saved successfully!', 'success');
           this.loadSystemStatus();
+          this.loadBeamInfo();
         } catch (e) {
           Components.showToast(`Failed to save settings: ${e.message}`, 'error');
         }
@@ -1521,6 +1895,9 @@ class SaveoApp {
       if (scheduleStart) scheduleStart.value = this.settings.schedule_start || '01:00';
       const scheduleStop = document.getElementById('setting-schedule-stop');
       if (scheduleStop) scheduleStop.value = this.settings.schedule_stop || '07:00';
+
+      const beamToggle = document.getElementById('setting-beam-enabled');
+      if (beamToggle) beamToggle.checked = Boolean(this.settings.beam_enabled);
 
       // These shape the desktop yt-dlp engine; the Android engine has fixed defaults.
       if (typeof window.SaveoAndroid !== 'undefined') {

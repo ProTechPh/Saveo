@@ -757,6 +757,61 @@ class SaveoAPI {
     return this.request(`/api/history/${id}?delete_file=${deleteFile}`, { method: 'DELETE' });
   }
 
+  async verifyHistoryItem(id) {
+    if (this.isNativeMobile()) {
+      return { status: 'unavailable' };
+    }
+    return this.request(`/api/history/${id}/verify`);
+  }
+
+  async searchTranscripts(query) {
+    if (this.isNativeMobile()) {
+      return [];
+    }
+    return this.request(`/api/transcripts/search?q=${encodeURIComponent(query)}`);
+  }
+
+  async getWatchlist() {
+    if (this.isNativeMobile()) return { items: [] };
+    return this.request('/api/watchlist');
+  }  async addWatchlist(payload) {
+    if (this.isNativeMobile()) return null;
+    return this.request('/api/watchlist', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  async removeWatchlist(id) {
+    if (this.isNativeMobile()) return { success: false };
+    return this.request(`/api/watchlist/${id}`, { method: 'DELETE' });
+  }
+
+  async checkWatchlistItem(id) {
+    if (this.isNativeMobile()) return { checked: 0, added: 0, skipped: 0 };
+    return this.request(`/api/watchlist/${id}/check`, { method: 'POST' });
+  }
+
+  async checkAllWatchlist() {
+    if (this.isNativeMobile()) return { results: [] };
+    return this.request('/api/watchlist/check-all', { method: 'POST' });
+  }
+
+  async toggleWatchlistItem(id, enabled) {
+    if (this.isNativeMobile()) return { success: false };
+    return this.request(`/api/watchlist/${id}/toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled })
+    });
+  }
+
+  async getCastInfo() {
+    if (this.isNativeMobile()) return { feed_path: '', m3u_path: '' };
+    return this.request('/api/cast/info');
+  }
+
+  async getBeamInfo() {
+    if (this.isNativeMobile()) return { enabled: false, url: '' };
+    return this.request('/api/beam/info');
+  }
+
   async clearHistory() {
     if (this.isNativeMobile()) {
       localStorage.removeItem('saveo_mobile_history');

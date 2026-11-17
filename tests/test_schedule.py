@@ -1,7 +1,16 @@
 """Saveo - off-peak download window tests."""
 
 import unittest
+import os
+import shutil
+import tempfile
+import atexit
 from datetime import datetime
+
+_TEST_HOME = tempfile.mkdtemp(prefix="saveo-test-home-")
+os.environ["HOME"] = _TEST_HOME
+os.environ["USERPROFILE"] = _TEST_HOME
+atexit.register(shutil.rmtree, _TEST_HOME, True)
 
 from engine.schedule import is_allowed_now, parse_hhmm
 

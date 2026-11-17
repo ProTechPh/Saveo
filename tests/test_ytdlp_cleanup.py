@@ -67,7 +67,7 @@ class TestYtdlpPartialCleanup(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def _run(self, cancel_check):
+    def _run(self, cancel_check, start_time=None, end_time=None):
         fake_module = types.SimpleNamespace(
             YoutubeDL=lambda opts: FakeYDL(opts, self.temp_dir)
         )
@@ -85,6 +85,8 @@ class TestYtdlpPartialCleanup(unittest.TestCase):
                 on_progress=lambda info: None,
                 cancel_check=cancel_check,
                 title="Task",
+                start_time=start_time,
+                end_time=end_time,
             )
 
     def test_pause_keeps_own_and_other_partials(self):
@@ -132,6 +134,15 @@ class TestYtdlpPartialCleanup(unittest.TestCase):
         self.assertIn("FFmpegEmbedSubtitle", keys)
         self.assertIn("FFmpegMetadata", keys)
         self.assertIn("EmbedThumbnail", keys)
+
+    def test_clip_range_option(self):
+        with self.assertRaises(Exception):
+            self._run(lambda: True, start_time=12.5, end_time=42)
+
+        opts = FakeYDL.last_opts
+        self.assertTrue(opts.get("force_keyframes_at_cuts"))
+        ranges = opts.get("download_ranges")({ "duration": 100 }, None)
+        self.assertEqual(ranges, [(12.5, 42.0)])
 
 
 if __name__ == "__main__":

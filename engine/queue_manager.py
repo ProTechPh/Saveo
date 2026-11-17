@@ -18,6 +18,7 @@ from .settings_manager import settings_manager
 from .history_manager import history_manager
 from .file_manager import format_bytes, get_default_download_dir
 from .schedule import is_allowed_now
+from . import provenance
 
 
 class DownloadPausedException(Exception):
@@ -39,7 +40,9 @@ class DownloadTask:
         output_dir: str = "",
         task_id: str = None,
         expected_size_str: str = "",
-        expected_bytes: int = 0
+        expected_bytes: int = 0,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None
     ):
         self.id = task_id or str(uuid.uuid4())
         self.url = url
@@ -53,6 +56,8 @@ class DownloadTask:
         self.output_dir = output_dir or settings_manager.get("download_dir", get_default_download_dir())
         self.expected_size_str = expected_size_str
         self.expected_bytes = expected_bytes
+        self.start_time = start_time
+        self.end_time = end_time
 
         self.status = "queued" # queued, downloading, processing, completed, failed, cancelled, paused
         self.percent = 0.0
@@ -113,6 +118,8 @@ class DownloadTask:
             "total_str": format_bytes(self.total_bytes) if self.total_bytes > 0 else "Unknown",
             "expected_size_str": self.expected_size_str,
             "expected_bytes": self.expected_bytes,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
             "speed_str": self.speed_str,
             "eta_str": self.eta_str,
             "error_friendly": self.error_friendly,
@@ -176,6 +183,8 @@ class QueueManager:
                     task_id=item.get("id"),
                     expected_size_str=item.get("expected_size_str", ""),
                     expected_bytes=int(item.get("expected_bytes") or 0),
+                    start_time=item.get("start_time"),
+                    end_time=item.get("end_time"),
                 )
                 task.created_at = item.get("created_at", time.time())
                 if item.get("status") == "paused":
@@ -273,6 +282,8 @@ class QueueManager:
         output_dir: str = "",
         expected_size_str: str = "",
         expected_bytes: int = 0,
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None,
         persist: bool = True
     ) -> DownloadTask:
         with self._lock:
@@ -292,7 +303,9 @@ class QueueManager:
                 audio_format=audio_format,
                 output_dir=output_dir,
                 expected_size_str=expected_size_str,
-                expected_bytes=expected_bytes
+                expected_bytes=expected_bytes,
+                start_time=start_time,
+                end_time=end_time
             )
             self.tasks[task.id] = task
             self.task_order.insert(0, task.id)
@@ -427,6 +440,32 @@ class QueueManager:
                 print(f"Queue loop error: {e}")
                 time.sleep(1)
 
+    def _finalize_provenance(self, task: DownloadTask):
+        """Write the hash/receipt off the download thread so large files don't stall the UI."""
+        try:
+            if not task.file_path or not os.path.isfile(task.file_path):
+                return
+            digest = provenance.sha256_file(task.file_path)
+            receipt = provenance.write_sidecar(task.file_path, {
+                "source_url": task.url,
+                "title": task.title,
+                "platform": task.platform,
+                "format_id": task.format_id,
+                "format_label": task.format_label,
+                "audio_format": task.audio_format,
+                "is_audio": task.is_audio,
+                "file_size": task.file_size,
+                "start_time": task.start_time,
+                "end_time": task.end_time,
+                "sha256": digest,
+            })
+            history_manager.update_fields(task.id, {
+                "sha256": digest,
+                "provenance_path": receipt,
+            })
+        except Exception:
+            pass
+
     def _execute_task(self, task: DownloadTask):
         try:
             provider = registry.get_provider_for_url(task.url)
@@ -475,7 +514,9 @@ class QueueManager:
                 audio_format=task.audio_format,
                 on_progress=progress_callback,
                 cancel_check=check_stop,
-                title=task.title
+                title=task.title,
+                start_time=task.start_time,
+                end_time=task.end_time
             )
 
             task.status = "completed"
@@ -500,11 +541,14 @@ class QueueManager:
                 "format_label": task.format_label,
                 "format_id": task.format_id,
                 "audio_format": task.audio_format,
+                "start_time": task.start_time,
+                "end_time": task.end_time,
                 "is_audio": task.is_audio,
                 "thumbnail": task.thumbnail,
                 "status": "completed",
             })
             self._save_state()
+            threading.Thread(target=self._finalize_provenance, args=(task,), daemon=True).start()
 
         except DownloadPausedException:
             task.status = "paused"

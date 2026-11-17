@@ -102,8 +102,12 @@ class DirectProvider(BaseProvider):
         audio_format: str,
         on_progress: Callable[[Dict[str, Any]], None],
         cancel_check: Callable[[], bool],
-        title: str = ""
+        title: str = "",
+        start_time: Optional[float] = None,
+        end_time: Optional[float] = None
     ) -> Dict[str, Any]:
+        if start_time is not None or end_time is not None:
+            raise Exception("Chapter clips require the yt-dlp engine and FFmpeg.")
         parsed = urlparse(url)
         raw_name = os.path.basename(parsed.path)
         name = unquote(raw_name)
