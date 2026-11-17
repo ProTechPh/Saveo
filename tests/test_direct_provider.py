@@ -5,8 +5,15 @@ import shutil
 import tempfile
 import threading
 import unittest
+import atexit
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+# Keep queue/settings/history writes out of the developer's real ~/.saveo.
+_TEST_HOME = tempfile.mkdtemp(prefix="saveo-test-home-")
+os.environ["HOME"] = _TEST_HOME
+os.environ["USERPROFILE"] = _TEST_HOME
+atexit.register(shutil.rmtree, _TEST_HOME, True)
 
 from engine.providers.direct_provider import DirectProvider
 

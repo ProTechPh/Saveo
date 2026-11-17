@@ -12,6 +12,14 @@ All notable changes to Saveo will be documented in this file.
   - Fixed an unlocked queue scan that could silently kill the scheduler thread.
   - History and settings writes are now serialized and atomic, preventing corrupt JSON under concurrent completions.
   - Retrying a cancelled/paused task resets pause and progress state correctly.
+- **Library & queue intelligence:**
+  - Duplicate-skip: completed downloads are matched by URL + format + media type, with a “Skip Already Downloaded” setting and a per-download “Download another copy” confirmation. Android uses the same rule against its local history/queue.
+  - Queue state is saved to `~/.saveo/queue.json`; queued/paused downloads survive a restart and interrupted downloads resume from their `.part` file.
+  - Bulk queue actions: Pause All, Resume All, and Retry Failed on desktop.
+  - Library actions: re-download a previous item at its original format, or delete the file from disk (desktop).
+- **Network & input:**
+  - Optional bandwidth limit (KB/s) and parallel-fragment downloads for the desktop engine.
+  - Drag and drop one link into the input, or several links into the batch drawer.
 - **Android:**
   - Downloads run one at a time until per-task pause/cancel tracking lands; the UI no longer claims 5 concurrent streams.
   - Fixed foreground-service double decrements that could stop the service while another download was active.

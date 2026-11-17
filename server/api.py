@@ -322,6 +322,7 @@ class DownloadRequest(BaseModel):
     thumbnail: Optional[str] = Field(None, max_length=2048)
     expected_size_str: Optional[str] = Field(None, max_length=100)
     expected_bytes: Optional[int] = Field(None)
+    force: bool = False
 
 class BatchParseRequest(BaseModel):
     text: str = Field(..., max_length=50000)
@@ -335,6 +336,7 @@ class BatchEnqueueRequest(BaseModel):
     output_dir: Optional[str] = Field(None, max_length=1000)
     playlist_folder: Optional[str] = Field(None, max_length=200)
     items: Optional[List[Dict[str, Any]]] = Field(None, max_length=500)
+    force: bool = False
 
 class PathRequest(BaseModel):
     path: Optional[str] = Field(None, max_length=1000)
@@ -496,6 +498,11 @@ async def start_download(req: DownloadRequest):
     if not registry.is_valid_url(url):
         raise HTTPException(status_code=400, detail="Invalid URL provided.")
 
+    if settings_manager.get("skip_duplicates", True) and not req.force:
+        duplicate = queue_manager.find_duplicate(url, req.format_label, req.is_audio)
+        if duplicate:
+            return {"duplicate": True, "existing": duplicate}
+
     out_dir = req.output_dir or settings_manager.get("download_dir", get_default_download_dir())
     task = queue_manager.add_task(
         url=url,
@@ -611,8 +618,15 @@ async def batch_enqueue(req: BatchEnqueueRequest):
                 items_map[it["url"]] = it
 
     created_tasks = []
+    skipped = []
     for u in req.urls:
         if registry.is_valid_url(u):
+            if settings_manager.get("skip_duplicates", True) and not req.force:
+                duplicate = queue_manager.find_duplicate(u, req.format_label, req.is_audio)
+                if duplicate:
+                    skipped.append({"url": u, "existing": duplicate})
+                    continue
+
             it_info = items_map.get(u, {})
             title = it_info.get("title", "")
             thumb = it_info.get("thumbnail", "")
@@ -635,11 +649,13 @@ async def batch_enqueue(req: BatchEnqueueRequest):
                 format_label=req.format_label,
                 is_audio=req.is_audio,
                 audio_format=req.audio_format,
-                output_dir=out_dir
+                output_dir=out_dir,
+                persist=False
             )
             created_tasks.append(task.to_dict())
 
-    return {"count": len(created_tasks), "tasks": created_tasks}
+    queue_manager.save_state()
+    return {"count": len(created_tasks), "tasks": created_tasks, "skipped": skipped}
 
 
 @app.get("/api/tasks")
@@ -993,7 +1009,7 @@ def _load_app_version():
                         return ver if ver.startswith("v") else f"v{ver}"
             except Exception:
                 pass
-    return "v1.4.15"
+    return "v1.4.16"
 
 
 APP_VERSION = _load_app_version()

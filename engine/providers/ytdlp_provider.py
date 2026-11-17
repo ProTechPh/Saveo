@@ -951,6 +951,26 @@ class YtDlpProvider(BaseProvider):
         if sys.platform == 'win32':
             ydl_opts['windowsfilenames'] = True
 
+        # Optional network shaping (desktop only; Android uses the embedded engine defaults).
+        try:
+            from ..settings_manager import settings_manager
+            try:
+                rate_kbps = int(settings_manager.get("rate_limit_kbps", 0) or 0)
+            except (TypeError, ValueError):
+                rate_kbps = 0
+            if rate_kbps > 0:
+                ydl_opts['ratelimit'] = rate_kbps * 1024
+
+            try:
+                fragments = int(settings_manager.get("fragment_concurrency", 1) or 1)
+            except (TypeError, ValueError):
+                fragments = 1
+            fragments = max(1, min(8, fragments))
+            if fragments > 1:
+                ydl_opts['concurrent_fragment_downloads'] = fragments
+        except Exception:
+            pass
+
         cookie_file = self._locate_cookie_file()
         if cookie_file:
             ydl_opts['cookiefile'] = cookie_file

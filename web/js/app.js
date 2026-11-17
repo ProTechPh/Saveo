@@ -218,6 +218,47 @@ class SaveoApp {
       });
     }
 
+    // Drag-and-drop links onto the input card (single or batch).
+    const dropZone = document.querySelector('.input-saveo-card');
+    const handleDroppedText = (text) => {
+      const value = (text || '').trim();
+      if (!value) return;
+      const urls = value.match(/https?:\/\/[^\s,;"'<>]+/g) || [];
+      const isBatch = urls.length > 1;
+      if (isBatch && batchDrawer && batchTextarea) {
+        batchDrawer.style.display = 'block';
+        if (btnBatchToggle) btnBatchToggle.classList.add('active');
+        batchTextarea.value = value;
+        if (btnClearBatch) btnClearBatch.style.display = 'flex';
+        batchTextarea.focus();
+      } else {
+        urlInput.value = value;
+        btnClear.style.display = 'flex';
+        this.instantDetectPlatform(value);
+        urlInput.focus();
+      }
+      Components.showToast(isBatch ? `Dropped ${urls.length} links into the batch input.` : 'Link dropped into the input.', 'info');
+    };
+    const bindDrop = (el) => {
+      if (!el) return;
+      el.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (dropZone) dropZone.classList.add('drag-over');
+      });
+      el.addEventListener('dragleave', () => {
+        if (dropZone) dropZone.classList.remove('drag-over');
+      });
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (dropZone) dropZone.classList.remove('drag-over');
+        handleDroppedText(e.dataTransfer ? e.dataTransfer.getData('text') : '');
+      });
+    };
+    bindDrop(dropZone);
+    bindDrop(urlInput);
+    bindDrop(batchTextarea);
+
     // Paste button (reads clipboard directly from native backend or web API)
     btnPaste.addEventListener('click', async () => {
       let text = '';
@@ -467,6 +508,51 @@ class SaveoApp {
         this.tasks = (this.tasks || []).filter(t => t.status === 'queued' || t.status === 'downloading' || t.status === 'processing' || t.status === 'pending');
         this.renderQueueList();
         Components.showToast('Cleared recent completed downloads.', 'info');
+      });
+    }
+
+    // Bulk queue actions (desktop)
+    const btnPauseAll = document.getElementById('btn-pause-all');
+    if (btnPauseAll) {
+      btnPauseAll.addEventListener('click', async () => {
+        const ids = (this.tasks || [])
+          .filter(t => ['downloading', 'processing', 'queued'].includes(t.status))
+          .map(t => t.id);
+        if (!ids.length) {
+          Components.showToast('No active downloads to pause.', 'info');
+          return;
+        }
+        await Promise.allSettled(ids.map(id => api.pauseTask(id)));
+        await this.loadTasks();
+        Components.showToast(`Paused ${ids.length} download(s).`, 'info');
+      });
+    }
+
+    const btnResumeAll = document.getElementById('btn-resume-all');
+    if (btnResumeAll) {
+      btnResumeAll.addEventListener('click', async () => {
+        const ids = (this.tasks || []).filter(t => t.status === 'paused').map(t => t.id);
+        if (!ids.length) {
+          Components.showToast('No paused downloads to resume.', 'info');
+          return;
+        }
+        await Promise.allSettled(ids.map(id => api.resumeTask(id)));
+        await this.loadTasks();
+        Components.showToast(`Resumed ${ids.length} download(s).`, 'info');
+      });
+    }
+
+    const btnRetryFailed = document.getElementById('btn-retry-failed');
+    if (btnRetryFailed) {
+      btnRetryFailed.addEventListener('click', async () => {
+        const ids = (this.tasks || []).filter(t => t.status === 'failed' || t.status === 'cancelled').map(t => t.id);
+        if (!ids.length) {
+          Components.showToast('No failed downloads to retry.', 'info');
+          return;
+        }
+        await Promise.allSettled(ids.map(id => api.retryTask(id)));
+        await this.loadTasks();
+        Components.showToast(`Retrying ${ids.length} download(s).`, 'info');
       });
     }
 
@@ -834,19 +920,35 @@ class SaveoApp {
     const audioCodec = isAudio && this.selectedFormat ? this.selectedFormat.ext : 'mp3';
     const outDir = document.getElementById('selected-save-dir').textContent.trim() || this.settings.download_dir;
 
+    const payload = {
+      url: this.currentMedia.url,
+      format_id: formatId,
+      format_label: formatLabel,
+      is_audio: isAudio,
+      audio_format: audioCodec,
+      output_dir: outDir,
+      title: this.currentMedia.title,
+      thumbnail: this.currentMedia.thumbnail,
+      expected_size_str: this.selectedFormat ? (this.selectedFormat.filesize_str || '') : '',
+      expected_bytes: this.selectedFormat ? (this.selectedFormat.filesize_approx || 0) : 0
+    };
+
     try {
-      const task = await api.startDownload({
-        url: this.currentMedia.url,
-        format_id: formatId,
-        format_label: formatLabel,
-        is_audio: isAudio,
-        audio_format: audioCodec,
-        output_dir: outDir,
-        title: this.currentMedia.title,
-        thumbnail: this.currentMedia.thumbnail,
-        expected_size_str: this.selectedFormat ? (this.selectedFormat.filesize_str || '') : '',
-        expected_bytes: this.selectedFormat ? (this.selectedFormat.filesize_approx || 0) : 0
-      });
+      let task = await api.startDownload(payload);
+
+      if (task && task.duplicate) {
+        const existing = task.existing || {};
+        if (existing.duplicate_source === 'queue') {
+          Components.showToast('Already in the download queue.', 'info');
+          return;
+        }
+        const label = existing.filename || existing.title || 'this media';
+        if (!confirm(`Already downloaded: ${label}\n\nDownload another copy anyway?`)) {
+          Components.showToast('Skipped: this file is already in your library.', 'info');
+          return;
+        }
+        task = await api.startDownload({ ...payload, force: true });
+      }
 
       this.activeSingleTaskId = task.id;
 
@@ -869,7 +971,7 @@ class SaveoApp {
   async startPlaylistDownload(playlistData, selectedEntries, options) {
     try {
       const urls = selectedEntries.map(e => e.url);
-      await api.batchEnqueue({
+      const res = await api.batchEnqueue({
         urls,
         items: selectedEntries,
         playlist_folder: playlistData.title,
@@ -881,7 +983,13 @@ class SaveoApp {
       });
 
       document.getElementById('playlist-container').innerHTML = '';
-      Components.showToast(`Downloading ${selectedEntries.length} videos from "${playlistData.title}"!`, 'success');
+      const started = res && typeof res.count === 'number' ? res.count : selectedEntries.length;
+      const skipped = (res && res.skipped) ? res.skipped.length : 0;
+      if (started === 0 && skipped > 0) {
+        Components.showToast(`All ${skipped} selected videos are already downloaded.`, 'info');
+      } else {
+        Components.showToast(`Downloading ${started} videos from "${playlistData.title}"${skipped ? ` (${skipped} already downloaded)` : ''}.`, 'success');
+      }
       await this.loadTasks();
 
     } catch (e) {
@@ -893,7 +1001,7 @@ class SaveoApp {
   async startBatchDownload(selectedItems, options) {
     try {
       const urls = selectedItems.map(it => it.url);
-      await api.batchEnqueue({
+      const res = await api.batchEnqueue({
         urls,
         items: selectedItems,
         is_audio: options.is_audio,
@@ -904,7 +1012,13 @@ class SaveoApp {
       });
 
       document.getElementById('batch-container').innerHTML = '';
-      Components.showToast(`Downloading ${selectedItems.length} items directly!`, 'success');
+      const started = res && typeof res.count === 'number' ? res.count : selectedItems.length;
+      const skipped = (res && res.skipped) ? res.skipped.length : 0;
+      if (started === 0 && skipped > 0) {
+        Components.showToast(`All ${skipped} selected items are already downloaded.`, 'info');
+      } else {
+        Components.showToast(`Downloading ${started} items${skipped ? ` (${skipped} already downloaded)` : ''}.`, 'success');
+      }
       await this.loadTasks();
 
     } catch (e) {
@@ -1069,6 +1183,29 @@ class SaveoApp {
           await api.openFile(path, id);
         } else if (action === 'reveal') {
           await api.revealFile(path, id);
+        } else if (action === 'delete-file') {
+          if (!confirm('Delete the actual file from disk? This cannot be undone.')) return;
+          await api.deleteHistoryItem(id, true);
+          const card = document.getElementById(`hist-item-${id}`);
+          if (card) card.remove();
+          await this.loadHistory();
+          Components.showToast('File deleted from disk.', 'info');
+        } else if (action === 'redownload') {
+          const url = target.getAttribute('data-url');
+          if (!url) return;
+          await api.startDownload({
+            url,
+            format_id: target.getAttribute('data-format') || 'best',
+            format_label: target.getAttribute('data-format-label') || 'Best Quality',
+            is_audio: target.getAttribute('data-audio') === '1',
+            audio_format: target.getAttribute('data-audio-format') || 'mp3',
+            output_dir: this.settings.download_dir,
+            title: target.getAttribute('data-title') || '',
+            thumbnail: target.getAttribute('data-thumb') || '',
+            force: true
+          });
+          await this.loadTasks();
+          Components.showToast('Re-download queued.', 'success');
         } else if (action === 'delete-hist') {
           await api.deleteHistoryItem(id);
           const card = document.getElementById(`hist-item-${id}`);
@@ -1136,6 +1273,8 @@ class SaveoApp {
     const btnBrowse = document.getElementById('btn-settings-browse');
     const sliderConcurrent = document.getElementById('setting-concurrent');
     const badgeConcurrent = document.getElementById('concurrent-val-badge');
+    const sliderFragments = document.getElementById('setting-fragment-concurrency');
+    const badgeFragments = document.getElementById('fragment-val-badge');
     const btnSave = document.getElementById('btn-save-settings');
 
     if (sliderConcurrent && badgeConcurrent) {
@@ -1144,6 +1283,14 @@ class SaveoApp {
       };
       sliderConcurrent.addEventListener('input', updateConcurrentBadge);
       sliderConcurrent.addEventListener('change', updateConcurrentBadge);
+    }
+
+    if (sliderFragments && badgeFragments) {
+      const updateFragmentBadge = () => {
+        badgeFragments.textContent = sliderFragments.value;
+      };
+      sliderFragments.addEventListener('input', updateFragmentBadge);
+      sliderFragments.addEventListener('change', updateFragmentBadge);
     }
 
     if (btnBrowse) {
@@ -1246,6 +1393,8 @@ class SaveoApp {
         const aCodec = document.getElementById('setting-audio-codec');
         const notif = document.getElementById('setting-notifications');
         const cookieBrowser = document.getElementById('setting-cookie-browser');
+        const rateInput = document.getElementById('setting-rate-limit');
+        const parsedRate = rateInput ? parseInt(rateInput.value, 10) : NaN;
         const activeThemeChip = document.querySelector('.theme-chip.active');
         const selectedTheme = (activeThemeChip ? activeThemeChip.getAttribute('data-theme') : null) || ThemeManager.currentTheme || 'dark';
 
@@ -1256,8 +1405,13 @@ class SaveoApp {
           max_concurrent_downloads: typeof window.SaveoAndroid !== 'undefined'
             ? 1
             : (sliderConcurrent ? parseInt(sliderConcurrent.value, 10) : (this.settings.max_concurrent_downloads || 3)),
+          fragment_concurrency: sliderFragments ? parseInt(sliderFragments.value, 10) : (this.settings.fragment_concurrency || 1),
+          rate_limit_kbps: Number.isNaN(parsedRate) ? (this.settings.rate_limit_kbps || 0) : parsedRate,
           filename_template: (document.getElementById('setting-filename-template')?.value || '{title}').trim() || '{title}',
           notifications: notif ? notif.checked : (this.settings.notifications !== false),
+          skip_duplicates: document.getElementById('setting-skip-duplicates')
+            ? document.getElementById('setting-skip-duplicates').checked
+            : (this.settings.skip_duplicates !== false),
           cookie_browser: cookieBrowser ? cookieBrowser.value : (this.settings.cookie_browser || 'none'),
           cookie_file: cookieInput ? cookieInput.value.trim() : (this.settings.cookie_file || ''),
           theme: selectedTheme
@@ -1315,8 +1469,29 @@ class SaveoApp {
         }
       }
 
+      const fragmentSlider = document.getElementById('setting-fragment-concurrency');
+      if (fragmentSlider) fragmentSlider.value = this.settings.fragment_concurrency || 1;
+      const fragmentBadge = document.getElementById('fragment-val-badge');
+      if (fragmentBadge) fragmentBadge.textContent = fragmentSlider ? fragmentSlider.value : (this.settings.fragment_concurrency || 1);
+
+      const rateInput = document.getElementById('setting-rate-limit');
+      if (rateInput) rateInput.value = this.settings.rate_limit_kbps || 0;
+
+      // These shape the desktop yt-dlp engine; the Android engine has fixed defaults.
+      if (typeof window.SaveoAndroid !== 'undefined') {
+        ['setting-rate-limit', 'setting-fragment-concurrency'].forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const row = el.closest('.setting-item');
+          if (row) row.style.display = 'none';
+        });
+      }
+
       const notif = document.getElementById('setting-notifications');
       if (notif) notif.checked = this.settings.notifications !== false;
+
+      const skipDup = document.getElementById('setting-skip-duplicates');
+      if (skipDup) skipDup.checked = this.settings.skip_duplicates !== false;
 
       const cookieInput = document.getElementById('setting-cookie-input');
       if (cookieInput) {
@@ -1352,7 +1527,7 @@ class SaveoApp {
   async loadSystemStatus() {
     try {
       const status = await api.getSystemStatus();
-      const appVer = status.app_version || 'v1.4.15';
+      const appVer = status.app_version || 'v1.4.16';
       const rawYtdlp = status.ytdlp_version;
 
       const verPill = document.getElementById('header-version-pill');
@@ -1526,7 +1701,7 @@ class SaveoApp {
       const curVerEl = document.getElementById('update-cur-ver');
       const newVerEl = document.getElementById('update-new-ver');
 
-      if (curVerEl) curVerEl.textContent = 'v1.4.15';
+      if (curVerEl) curVerEl.textContent = 'v1.4.16';
       if (newVerEl) newVerEl.textContent = '...';
       if (titleEl) titleEl.textContent = 'Checking for Updates...';
       if (descEl) descEl.textContent = 'Contacting update servers to verify Saveo release and platform core engine status...';
@@ -1535,8 +1710,8 @@ class SaveoApp {
       try {
         const info = await api.checkUpdates();
         currentUpdateInfo = info;
-        const appInst = info.app_installed || 'v1.4.15';
-        const appLatest = info.app_latest || 'v1.4.15';
+        const appInst = info.app_installed || 'v1.4.16';
+        const appLatest = info.app_latest || 'v1.4.16';
         const isUpToDate = Boolean(info.app_up_to_date);
 
         if (curVerEl) curVerEl.textContent = appInst;
@@ -1574,8 +1749,8 @@ class SaveoApp {
           downloadState = 'can-download';
         }
       } catch (e) {
-        if (curVerEl) curVerEl.textContent = 'v1.4.15';
-        if (newVerEl) newVerEl.textContent = 'v1.4.15';
+        if (curVerEl) curVerEl.textContent = 'v1.4.16';
+        if (newVerEl) newVerEl.textContent = 'v1.4.16';
         if (titleEl) titleEl.textContent = 'Saveo Core Engine';
         if (descEl) descEl.textContent = 'Verified online. You can check the embedded yt-dlp core engine.';
         if (changelogEl) changelogEl.innerHTML = renderChangelog('');
@@ -1614,7 +1789,7 @@ class SaveoApp {
     if (btnPrimary) {
       btnPrimary.addEventListener('click', async () => {
       if (downloadState === 'can-download') {
-        const url = currentUpdateInfo?.installer_url || `https://github.com/ProTechPh/Saveo/releases/download/${currentUpdateInfo?.app_latest || 'v1.4.15'}/Saveo-Setup.exe`;
+        const url = currentUpdateInfo?.installer_url || `https://github.com/ProTechPh/Saveo/releases/download/${currentUpdateInfo?.app_latest || 'v1.4.16'}/Saveo-Setup.exe`;
         const size = currentUpdateInfo?.installer_size || 0;
 
         downloadState = 'downloading';

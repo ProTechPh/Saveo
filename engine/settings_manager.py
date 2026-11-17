@@ -33,9 +33,12 @@ class SettingsManager:
             "default_video_quality": "1080p",
             "default_audio_format": "mp3",
             "max_concurrent_downloads": 3,
+            "fragment_concurrency": 1,
+            "rate_limit_kbps": 0,
             "theme": "dark",
             "filename_template": "{title}",
             "notifications": True,
+            "skip_duplicates": True,
             "cookie_file": "",
             "cookie_browser": "none",
         }
@@ -81,6 +84,16 @@ class SettingsManager:
                 updates["max_concurrent_downloads"] = max(1, min(5, int(updates["max_concurrent_downloads"])))
             except (TypeError, ValueError):
                 updates.pop("max_concurrent_downloads", None)
+        if "fragment_concurrency" in updates:
+            try:
+                updates["fragment_concurrency"] = max(1, min(8, int(updates["fragment_concurrency"])))
+            except (TypeError, ValueError):
+                updates.pop("fragment_concurrency", None)
+        if "rate_limit_kbps" in updates:
+            try:
+                updates["rate_limit_kbps"] = max(0, min(1_000_000, int(updates["rate_limit_kbps"])))
+            except (TypeError, ValueError):
+                updates.pop("rate_limit_kbps", None)
         with self._lock:
             self._settings.update(updates)
             self._save(self._settings)

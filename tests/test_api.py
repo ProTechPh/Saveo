@@ -116,6 +116,35 @@ class TestAPIEndpoints(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIsInstance(resp.json(), list)
 
+    def test_duplicate_download_is_skipped(self):
+        from engine.history_manager import history_manager
+        url = "https://example.com/watch/duplicate-test"
+        label = "1080p FHD • MP4"
+        history_manager.add_entry({
+            "id": "dup-api",
+            "url": url,
+            "title": "Already here",
+            "format_label": label,
+            "is_audio": False,
+            "status": "completed",
+            "filename": "already.mp4",
+        })
+        try:
+            resp = client.post("/api/download", json={
+                "url": url, "format_label": label, "is_audio": False,
+            })
+            self.assertEqual(resp.status_code, 200)
+            self.assertTrue(resp.json().get("duplicate"))
+
+            batch = client.post("/api/batch/enqueue", json={
+                "urls": [url], "format_label": label, "is_audio": False,
+            })
+            self.assertEqual(batch.status_code, 200)
+            self.assertEqual(batch.json()["count"], 0)
+            self.assertEqual(len(batch.json()["skipped"]), 1)
+        finally:
+            history_manager.remove_entry("dup-api")
+
     def test_system_status_endpoint(self):
         resp = client.get("/api/system/status")
         self.assertEqual(resp.status_code, 200)

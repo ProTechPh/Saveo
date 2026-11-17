@@ -44,6 +44,23 @@ if (!html.includes("&lt;img src=x")) failures.push("queue title was not escaped"
 if (html.includes('onerror="window.__pwned')) failures.push("inline handler injected in queue card");
 if (html.includes("<img src=x")) failures.push("raw tag from title rendered in queue card");
 
+// History cards carry URL/thumbnail/format values into data attributes.
+const historyHtml = Components.renderHistoryItem({
+  id: "hist-1",
+  filename: evil,
+  title: evil,
+  url: 'https://example.com/x" onclick="window.__pwned=1',
+  thumbnail: 'https://example.com/t.jpg" onerror="window.__pwned=1',
+  format_label: evil,
+  is_audio: false,
+  file_path: "C:/media/file.mp4",
+  file_size: 1024,
+  created_at_str: evil,
+}).innerHTML;
+if (!historyHtml.includes("&lt;img src=x")) failures.push("history title was not escaped");
+if (historyHtml.includes('onclick="window.__pwned')) failures.push("attribute breakout in history URL");
+if (historyHtml.includes('onerror="window.__pwned')) failures.push("inline thumbnail handler in history card");
+
 // showToast must treat the message as text, never as markup.
 const appended = [];
 const toastEl = { innerHTML: "", appendChild: (el) => appended.push(el) };

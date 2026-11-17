@@ -553,6 +553,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
 }
 
 .input-saveo-card:focus-within { border-color: var(--line-strong); }
+.input-saveo-card.drag-over { border-color: var(--accent-line); background: var(--accent-soft); }
 
 .saveo-input-bar {
   display: flex;
@@ -1196,6 +1197,9 @@ input[type="checkbox"] { accent-color: var(--accent); }
   margin-bottom: 8px;
   padding: 0;
 }
+
+.recent-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.bulk-queue-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
 .recent-title {
   font-size: 11px;
@@ -2126,6 +2130,8 @@ input[type="checkbox"] { accent-color: var(--accent); }
 
   .saveo-recent-actions .btn-saveo-open span { display: none; }
   .saveo-recent-actions .btn-saveo-open { width: 30px; padding: 0; justify-content: center; }
+
+  .bulk-queue-actions { display: none; }
 
   .toast-container { bottom: 64px; right: 12px; left: 12px; }
   .toast { max-width: none; }

@@ -50,6 +50,21 @@ class HistoryManager:
         with self._lock:
             return list(reversed(self._history))
 
+    def find_duplicate(self, url: str, format_label: str, is_audio: bool) -> Optional[Dict[str, Any]]:
+        """Return a completed record for the same URL + format, if one exists."""
+        if not url:
+            return None
+        with self._lock:
+            for item in reversed(self._history):
+                if (
+                    item.get("url") == url
+                    and item.get("status", "completed") == "completed"
+                    and item.get("format_label", "") == (format_label or "")
+                    and bool(item.get("is_audio")) == bool(is_audio)
+                ):
+                    return dict(item)
+        return None
+
     def add_entry(self, entry: Dict[str, Any]) -> Dict[str, Any]:
         """
         Add or update history record.
@@ -64,6 +79,8 @@ class HistoryManager:
             "file_size": entry.get("file_size", 0),
             "file_size_str": entry.get("file_size_str", ""),
             "format_label": entry.get("format_label", ""),
+            "format_id": entry.get("format_id", ""),
+            "audio_format": entry.get("audio_format", ""),
             "is_audio": entry.get("is_audio", False),
             "thumbnail": entry.get("thumbnail", ""),
             "status": entry.get("status", "completed"), # completed, failed

@@ -121,6 +121,12 @@ Smart error detection identifies country-level ISP blocks and geo-restrictions, 
 
 ### More built in
 
+- **Duplicate-aware downloads:** Saveo can skip a link that was already completed in the same format, with a one-click “download another copy” override.
+- **Restart-safe queue:** Queued and paused downloads are saved locally and resume from their partial file after relaunch.
+- **Bulk queue controls:** Pause all, resume all, and retry failed downloads from the queue header.
+- **Library actions:** Re-download a previous item in its original format, or delete the file from disk.
+- **Network controls:** Optional bandwidth limit and parallel-fragment downloads for faster or metered connections.
+- **Drag-and-drop links:** Drop one link into the input, or a list of links into the batch drawer.
 - **In-app updates:** Check for new Saveo releases and view release notes directly inside the application.
 - **Engine maintenance:** Update the embedded yt-dlp core engine from within the application with a single click.
 - **Dynamic version synchronization:** Keeps the displayed application version synchronized with release tags.

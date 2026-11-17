@@ -26,7 +26,7 @@
         <div class="brand-text">
           <span class="brand-name">Saveo</span>
         </div>
-        <span class="desktop-pill-badge pill-version" id="header-version-pill">v1.4.15</span>
+        <span class="desktop-pill-badge pill-version" id="header-version-pill">v1.4.16</span>
       </div>
 
       <!-- NAVIGATION TABS (Desktop) -->
@@ -444,7 +444,14 @@
           <div class="downloader-queue-section" id="downloader-queue-section">
             <div class="recent-downloads-header" id="recent-downloads-header" style="display: none;">
               <h3 class="recent-title">Recent Downloads (<span id="recent-downloads-count">0</span>)</h3>
-              <button class="subtle-link-btn" id="btn-clear-recent-downloads">Clear All</button>
+              <div class="recent-actions">
+                <div class="bulk-queue-actions">
+                  <button class="subtle-link-btn" id="btn-pause-all">Pause All</button>
+                  <button class="subtle-link-btn" id="btn-resume-all">Resume All</button>
+                  <button class="subtle-link-btn" id="btn-retry-failed">Retry Failed</button>
+                </div>
+                <button class="subtle-link-btn" id="btn-clear-recent-downloads">Clear All</button>
+              </div>
             </div>
             <div class="downloader-queue-list" id="downloader-queue-list">
               <div class="downloader-cat-idle">
@@ -584,7 +591,30 @@
                 </div>
               </div>
 
-              <!-- 5. Filename Template -->
+              <!-- 5. Bandwidth Limit -->
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Bandwidth Limit (KB/s)</label>
+                  <span>0 means unlimited. Useful on metered or shared connections.</span>
+                </div>
+                <div class="setting-control">
+                  <input type="number" id="setting-rate-limit" class="text-input" min="0" step="64" value="0" style="max-width: 140px;" />
+                </div>
+              </div>
+
+              <!-- 6. Parallel Fragments -->
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Parallel Fragments</label>
+                  <span>Extra connections per download (1 = default). Higher can speed up DASH sources but may trigger throttling.</span>
+                </div>
+                <div class="setting-control concurrent-control">
+                  <input type="range" id="setting-fragment-concurrency" min="1" max="8" value="1" class="slider" />
+                  <span class="slider-badge" id="fragment-val-badge">1</span>
+                </div>
+              </div>
+
+              <!-- 7. Filename Template -->
               <div class="setting-item">
                 <div class="setting-info">
                   <label>Filename Template</label>
@@ -624,6 +654,20 @@
                 <div class="setting-control">
                   <label class="toggle-switch">
                     <input type="checkbox" id="setting-notifications" checked />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- 7. Skip Already Downloaded -->
+              <div class="setting-item setting-item-toggle">
+                <div class="setting-info">
+                  <label>Skip Already Downloaded</label>
+                  <span>Don't create another file when the same link was already completed in the same format.</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-skip-duplicates" checked />
                     <span class="toggle-slider"></span>
                   </label>
                 </div>
@@ -745,7 +789,7 @@
           <div class="update-version-card">
             <div class="ver-col">
               <span class="ver-label">INSTALLED VERSION</span>
-              <span class="ver-value" id="update-cur-ver">v1.4.15</span>
+              <span class="ver-value" id="update-cur-ver">v1.4.16</span>
             </div>
             <div class="ver-arrow">➔</div>
             <div class="ver-col">

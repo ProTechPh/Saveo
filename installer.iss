@@ -6,7 +6,7 @@
 
 #define MyAppName "Saveo"
 #ifndef MyAppVersion
-#define MyAppVersion "1.4.15"
+#define MyAppVersion "1.4.16"
 #endif
 #define MyAppPublisher "Saveo"
 #define MyAppURL "https://github.com/ProTechPh/Saveo"

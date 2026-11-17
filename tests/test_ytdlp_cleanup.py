@@ -4,8 +4,16 @@ import shutil
 import tempfile
 import types
 import unittest
+import os
+import atexit
 from pathlib import Path
 from unittest.mock import patch
+
+# Keep queue/settings/history writes out of the developer's real ~/.saveo.
+_TEST_HOME = tempfile.mkdtemp(prefix="saveo-test-home-")
+os.environ["HOME"] = _TEST_HOME
+os.environ["USERPROFILE"] = _TEST_HOME
+atexit.register(shutil.rmtree, _TEST_HOME, True)
 
 import engine.providers.ytdlp_provider as provider_module
 from engine.providers.ytdlp_provider import YtDlpProvider

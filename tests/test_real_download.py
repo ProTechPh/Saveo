@@ -8,8 +8,15 @@ import os
 import sys
 import shutil
 import tempfile
+import atexit
 import unittest
 from pathlib import Path
+
+# Keep queue/settings/history writes out of the developer's real ~/.saveo.
+_TEST_HOME = tempfile.mkdtemp(prefix="saveo-test-home-")
+os.environ["HOME"] = _TEST_HOME
+os.environ["USERPROFILE"] = _TEST_HOME
+atexit.register(shutil.rmtree, _TEST_HOME, True)
 
 # Add project root to sys.path
 root_dir = Path(__file__).resolve().parent.parent

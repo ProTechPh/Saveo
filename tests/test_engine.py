@@ -9,7 +9,14 @@ import shutil
 import tempfile
 import threading
 import unittest
+import atexit
 from pathlib import Path
+
+# Keep queue/settings/history writes out of the developer's real ~/.saveo.
+_TEST_HOME = tempfile.mkdtemp(prefix="saveo-test-home-")
+os.environ["HOME"] = _TEST_HOME
+os.environ["USERPROFILE"] = _TEST_HOME
+atexit.register(shutil.rmtree, _TEST_HOME, True)
 
 # Add project root to sys.path
 root_dir = Path(__file__).resolve().parent.parent
@@ -167,6 +174,10 @@ class TestSaveoCore(unittest.TestCase):
         sm_reloaded.update({"max_concurrent_downloads": 0})
         self.assertEqual(sm_reloaded.get("max_concurrent_downloads"), 1)
 
+        sm_reloaded.update({"fragment_concurrency": 99, "rate_limit_kbps": -100})
+        self.assertEqual(sm_reloaded.get("fragment_concurrency"), 8)
+        self.assertEqual(sm_reloaded.get("rate_limit_kbps"), 0)
+
     def test_history_manager(self):
         """Test download history recording, listing, and deletion."""
         hist_dir = Path(self.temp_dir) / "history"
@@ -179,6 +190,9 @@ class TestSaveoCore(unittest.TestCase):
             "platform": "Direct",
             "filename": "Awesome Sample Video.mp4",
             "file_size": 15000000,
+            "format_label": "1080p FHD • MP4",
+            "format_id": "1080p",
+            "audio_format": "mp3",
             "status": "completed"
         }
         hm.add_entry(dummy_entry)
@@ -187,6 +201,8 @@ class TestSaveoCore(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["id"], "item-101")
         self.assertEqual(items[0]["title"], "Awesome Sample Video")
+        self.assertEqual(items[0]["format_id"], "1080p")
+        self.assertEqual(items[0]["audio_format"], "mp3")
 
         # Remove entry
         res = hm.remove_entry("item-101")
@@ -209,6 +225,56 @@ class TestSaveoCore(unittest.TestCase):
 
         self.assertEqual(len(hm.get_all()), 20)
         self.assertEqual(len(HistoryManager(hist_dir).get_all()), 20)
+
+    def test_history_duplicate_lookup(self):
+        """Duplicate detection matches URL + format + media type, nothing looser."""
+        hist_dir = Path(self.temp_dir) / "history-duplicates"
+        hm = HistoryManager(hist_dir)
+        hm.add_entry({
+            "id": "dup-1",
+            "url": "https://example.com/watch/1",
+            "format_label": "1080p FHD • MP4",
+            "is_audio": False,
+            "status": "completed",
+            "filename": "sample.mp4",
+        })
+
+        self.assertIsNotNone(hm.find_duplicate("https://example.com/watch/1", "1080p FHD • MP4", False))
+        self.assertIsNone(hm.find_duplicate("https://example.com/watch/1", "720p HD • MP4", False))
+        self.assertIsNone(hm.find_duplicate("https://example.com/watch/1", "1080p FHD • MP4", True))
+
+    def test_queue_state_persists_and_restores(self):
+        """Queued and paused tasks survive a restart; running tasks return as queued."""
+        state_file = Path(self.temp_dir) / "queue.json"
+        qm = QueueManager(state_file=str(state_file), start_worker=False)
+        queued = qm.add_task(
+            url="https://example.com/a",
+            title="A",
+            format_label="1080p FHD • MP4",
+            format_id="1080p",
+            output_dir=self.temp_dir,
+        )
+        paused = qm.add_task(
+            url="https://example.com/b",
+            title="B",
+            format_label="720p HD • MP4",
+            output_dir=self.temp_dir,
+        )
+        qm.pause_task(paused.id)
+        queued.status = "downloading"
+        qm._save_state()
+
+        self.assertTrue(state_file.exists())
+        restored = QueueManager(state_file=str(state_file), start_worker=False)
+        tasks = {t["id"]: t for t in restored.get_all_tasks()}
+        self.assertEqual(set(tasks), {queued.id, paused.id})
+        self.assertEqual(tasks[queued.id]["status"], "queued")
+        self.assertEqual(tasks[queued.id]["format_id"], "1080p")
+        self.assertEqual(tasks[paused.id]["status"], "paused")
+
+        duplicate = restored.find_duplicate("https://example.com/a", "1080p FHD • MP4", False)
+        self.assertIsNotNone(duplicate)
+        self.assertEqual(duplicate["duplicate_source"], "queue")
 
     def test_queue_task_lifecycle(self):
         """Test queue task state changes, cancellation and retrying."""

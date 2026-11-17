@@ -464,8 +464,14 @@ const Components = {
     const formatLabel = (fmtStr && fmtStr !== 'undefined') ? fmtStr : (isAudio ? 'Audio' : 'Video');
     const sizeStr = item.file_size_str || (item.file_size ? this.formatBytes(item.file_size) : (item.downloaded_bytes ? this.formatBytes(item.downloaded_bytes) : ''));
     const title = String(item.filename || item.title || 'Downloaded Media');
+    const mediaTitle = item.title ? String(item.title) : title;
     const filePath = item.file_path ? String(item.file_path) : '';
     const itemId = String(item.id || '');
+    const sourceUrl = item.url ? String(item.url) : '';
+    const formatId = item.format_id ? String(item.format_id) : (isAudio ? 'bestaudio' : 'best');
+    const audioFormat = item.audio_format ? String(item.audio_format) : 'mp3';
+    const originalThumb = item.thumbnail ? String(item.thumbnail) : '';
+    const canDeleteFile = typeof window === 'undefined' || typeof window.SaveoAndroid === 'undefined';
     const icon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="5" width="19" height="14" rx="2"></rect><path d="M2.5 9h19"></path></svg>';
 
     const safeThumb = this.escapeAttr(thumbSrc);
@@ -477,10 +483,13 @@ const Components = {
     const safeDate = this.escapeHtml(item.created_at_str || '');
     const safePath = this.escapeAttr(filePath);
     const safeId = this.escapeAttr(itemId);
+    const safeUrl = this.escapeAttr(sourceUrl);
+    const safeFormatId = this.escapeAttr(formatId);
+    const safeAudioFormat = this.escapeAttr(audioFormat);
 
     card.innerHTML = `
       <div class="history-thumb-box">
-        ${thumbSrc ? `<img class="history-thumb" referrerpolicy="no-referrer" src="${safeThumb}" alt="thumb" onerror="if(!this.src.includes('/api/proxy/thumbnail') && '${this.escapeAttr(item.thumbnail || '')}'){this.src='/api/proxy/thumbnail?url=' + encodeURIComponent('${this.escapeAttr(item.thumbnail || '')}');}else{this.style.display='none';const fb=this.parentElement.querySelector('.history-thumb-fallback');if(fb)fb.style.display='flex';}" /><div class="history-thumb-fallback" style="display:none;">${icon}</div>` : `<div class="history-thumb-fallback">${icon}</div>`}
+        ${thumbSrc ? `<img class="history-thumb" referrerpolicy="no-referrer" src="${safeThumb}" alt="thumb" /><div class="history-thumb-fallback" style="display:none;">${icon}</div>` : `<div class="history-thumb-fallback">${icon}</div>`}
       </div>
       <div class="history-info">
         <div class="history-filename" title="${safeTitleAttr}">${safeTitle}</div>
@@ -499,11 +508,34 @@ const Components = {
             <span>Open</span>
           </button>
         ` : ''}
-        <button class="icon-btn-trash" data-action="delete-hist" data-id="${safeId}" title="Remove record">
+        ${sourceUrl ? `
+          <button class="icon-btn" data-action="redownload" data-url="${safeUrl}" data-format="${safeFormatId}" data-format-label="${safeFormat}" data-audio="${isAudio ? '1' : '0'}" data-audio-format="${safeAudioFormat}" data-title="${this.escapeAttr(mediaTitle)}" data-thumb="${this.escapeAttr(originalThumb)}" title="Download again">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+          </button>
+        ` : ''}
+        ${canDeleteFile && filePath ? `
+          <button class="icon-btn-trash" data-action="delete-file" data-id="${safeId}" title="Delete file from disk">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+          </button>
+        ` : ''}
+        <button class="icon-btn" data-action="delete-hist" data-id="${safeId}" title="Remove record from history">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       </div>
     `;
+
+    const imgEl = card.querySelector('img.history-thumb');
+    if (imgEl) {
+      imgEl.addEventListener('error', () => {
+        if (originalThumb && !imgEl.src.includes('/api/proxy/thumbnail')) {
+          imgEl.src = `/api/proxy/thumbnail?url=${encodeURIComponent(originalThumb)}`;
+        } else {
+          imgEl.style.display = 'none';
+          const fallback = card.querySelector('.history-thumb-fallback');
+          if (fallback) fallback.style.display = 'flex';
+        }
+      });
+    }
 
     return card;
   },
