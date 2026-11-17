@@ -504,6 +504,7 @@ class YtDlpProvider(BaseProvider):
         raw_formats = info.get('formats') or []
         parsed_video_formats = self._parse_video_formats(raw_formats, duration)
         parsed_audio_formats = self._parse_audio_formats(raw_formats, duration)
+        advanced_formats = self._parse_advanced_formats(raw_formats)
 
         return MediaMetadata(
             id=str(info.get('id', 'media')),
@@ -518,6 +519,7 @@ class YtDlpProvider(BaseProvider):
             description=description,
             formats=parsed_video_formats,
             audio_formats=parsed_audio_formats,
+            advanced_formats=advanced_formats,
             webpage_url=info.get('webpage_url', url),
             original_url=url,
             is_playlist=False,
@@ -723,6 +725,69 @@ class YtDlpProvider(BaseProvider):
             ))
 
         return video_formats
+
+    def _parse_advanced_formats(self, raw_formats: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Expose exact video streams (codec, fps, HDR, bitrate, container) for advanced users."""
+        items = []
+        seen = set()
+        for f in raw_formats:
+            format_id = f.get('format_id')
+            if not format_id or format_id in seen:
+                continue
+            vcodec = (f.get('vcodec') or '').lower()
+            if vcodec in ('', 'none'):
+                continue
+            note = str(f.get('format_note') or '')
+            if 'storyboard' in note.lower():
+                continue
+
+            seen.add(format_id)
+            height = int(f.get('height') or 0)
+            width = int(f.get('width') or 0)
+            fps = f.get('fps')
+            ext = (f.get('ext') or '').lower()
+            acodec = (f.get('acodec') or '').lower()
+            has_audio = acodec not in ('', 'none')
+            filesize = int(f.get('filesize') or f.get('filesize_approx') or 0)
+            tbr = f.get('tbr') or f.get('vbr') or 0
+            hdr = str(f.get('dynamic_range') or '')
+            codec_short = vcodec.split('.')[0].upper() if vcodec else ''
+
+            parts = [f"{height}p" if height else "Video"]
+            if fps:
+                parts.append(f"{int(round(fps))}fps")
+            if hdr and hdr.upper() != 'SDR':
+                parts.append(hdr.upper())
+            if codec_short:
+                parts.append(codec_short)
+            if ext:
+                parts.append(ext.upper())
+            if tbr:
+                parts.append(f"{int(round(tbr))}kbps")
+            label = " • ".join(parts)
+
+            items.append({
+                "format_id": str(format_id),
+                "ext": ext,
+                "height": height,
+                "width": width,
+                "resolution": f"{width}x{height}" if width and height else (f"{height}p" if height else "Video"),
+                "label": label,
+                "filesize_approx": filesize,
+                "filesize_str": format_bytes(filesize) if filesize > 0 else "Adaptive",
+                "has_video": True,
+                "has_audio": has_audio,
+                "is_audio_only": False,
+                "fps": fps,
+                "vcodec": vcodec,
+                "acodec": acodec,
+                "tbr": round(float(tbr), 1) if tbr else 0,
+                "hdr": hdr,
+                "note": note,
+            })
+
+        items.sort(key=lambda item: (item["height"], item.get("fps") or 0, item.get("tbr") or 0), reverse=True)
+        return items[:60]
 
     def _parse_audio_formats(self, raw_formats: List[Dict[str, Any]], duration: int) -> List[MediaFormat]:
         """
@@ -1041,6 +1106,43 @@ class YtDlpProvider(BaseProvider):
                     ydl_opts['merge_output_format'] = 'mp4'
                 else:
                     ydl_opts['format'] = f"{format_id}/best[ext=mp4]/best/bestvideo+bestaudio"
+
+        # Optional subtitles / metadata / cover art (desktop engine).
+        subs_enabled = False
+        subs_mode = "sidecar"
+        subtitle_langs = ["en"]
+        embed_metadata = False
+        embed_thumbnail = False
+        try:
+            from ..settings_manager import settings_manager
+            subs_enabled = bool(settings_manager.get("subtitles_enabled", False))
+            subs_mode = str(settings_manager.get("subtitle_mode", "sidecar") or "sidecar")
+            raw_langs = str(settings_manager.get("subtitle_langs", "en") or "en")
+            parsed_langs = [part for part in re.split(r"[,\s]+", raw_langs) if part][:20]
+            subtitle_langs = parsed_langs or ["en"]
+            embed_metadata = bool(settings_manager.get("embed_metadata", False))
+            embed_thumbnail = bool(settings_manager.get("embed_thumbnail", False))
+        except Exception:
+            pass
+
+        if not is_audio and subs_enabled:
+            ydl_opts['writesubtitles'] = True
+            ydl_opts['writeautomaticsub'] = True
+            ydl_opts['subtitleslangs'] = subtitle_langs
+            if has_ffmpeg:
+                ydl_opts['subtitlesformat'] = 'srt/vtt/best'
+
+        extra_postprocessors = []
+        if has_ffmpeg:
+            if (not is_audio) and subs_enabled and subs_mode == 'embed':
+                extra_postprocessors.append({'key': 'FFmpegEmbedSubtitle'})
+            if embed_metadata:
+                extra_postprocessors.append({'key': 'FFmpegMetadata'})
+            if embed_thumbnail and (not is_audio or target_codec in ("mp3", "m4a", "opus", "aac")):
+                ydl_opts['writethumbnail'] = True
+                extra_postprocessors.append({'key': 'EmbedThumbnail'})
+        if extra_postprocessors:
+            ydl_opts.setdefault('postprocessors', []).extend(extra_postprocessors)
 
         ytdlp_mod = get_yt_dlp()
         try:

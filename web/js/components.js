@@ -98,6 +98,7 @@ const Components = {
       chip.addEventListener('click', () => {
         container.querySelectorAll('.saveo-quality-chip').forEach(c => c.classList.remove('selected'));
         chip.classList.add('selected');
+        document.querySelectorAll('#advanced-formats-list .advanced-format-row').forEach(r => r.classList.remove('selected'));
         const sizeEl = document.getElementById('saveo-estimated-size');
         if (sizeEl) sizeEl.textContent = fmt.filesize_str || 'Standard';
         onSelect(fmt);
@@ -142,6 +143,49 @@ const Components = {
       });
 
       container.appendChild(chip);
+    });
+  },
+
+  // Render exact source streams for advanced users.
+  renderAdvancedFormats(formats, onSelect) {
+    const wrap = document.getElementById('advanced-formats-wrap');
+    const list = document.getElementById('advanced-formats-list');
+    const count = document.getElementById('advanced-format-count');
+    if (!wrap || !list) return;
+
+    list.innerHTML = '';
+    if (!formats || formats.length === 0) {
+      if (count) count.textContent = '0';
+      wrap.style.display = 'none';
+      return;
+    }
+
+    if (count) count.textContent = formats.length;
+    wrap.style.display = 'block';
+
+    formats.forEach((fmt) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'advanced-format-row';
+      row.setAttribute('data-fid', fmt.format_id);
+
+      const label = document.createElement('span');
+      label.textContent = fmt.label || fmt.format_id;
+      const size = document.createElement('span');
+      size.className = 'af-size';
+      size.textContent = `${fmt.has_audio ? 'muxed' : 'video only'}${fmt.filesize_str ? ` • ${fmt.filesize_str}` : ''}`;
+
+      row.appendChild(label);
+      row.appendChild(size);
+      row.addEventListener('click', () => {
+        list.querySelectorAll('.advanced-format-row').forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        document.querySelectorAll('#video-formats-grid .saveo-quality-chip').forEach(c => c.classList.remove('selected'));
+        const sizeEl = document.getElementById('saveo-estimated-size');
+        if (sizeEl) sizeEl.textContent = fmt.filesize_str || 'Adaptive';
+        onSelect({ ...fmt, advanced: true });
+      });
+      list.appendChild(row);
     });
   },
 
@@ -565,6 +609,8 @@ const Components = {
     let selectedQuality = 'best'; // '1080p', '720p', '480p', 'best', 'audio_mp3', 'audio_m4a'
     let isAudio = false;
     let audioFormat = 'mp3';
+    let reverseOrder = false;
+    let lastClickedIdx = null;
 
     // Size estimation helper based on duration and quality bitrate
     const getEntrySize = (durSec) => {
@@ -685,12 +731,18 @@ const Components = {
         </div>
       </div>
 
-      <!-- SELECTION CONTROLS HEADER -->
+      <!-- FILTER + SELECTION CONTROLS -->
+      <div class="playlist-filter-wrap">
+        <input type="search" class="text-input" id="playlist-filter-input" placeholder="Filter videos by title..." title="Filter videos; Select All applies to visible rows" autocomplete="off" />
+      </div>
+
       <div class="saveo-selection-bar">
         <div class="saveo-selection-count">
           <span id="playlist-selected-count">${selectedIndices.size}</span> of ${count} videos selected
         </div>
         <div class="saveo-selection-btns">
+          <button class="text-action-btn" id="btn-reverse-order">Reverse order</button>
+          <span class="divider">|</span>
           <button class="text-action-btn" id="btn-select-all">Select All</button>
           <span class="divider">|</span>
           <button class="text-action-btn" id="btn-deselect-all">Deselect All</button>
@@ -757,44 +809,75 @@ const Components = {
       });
     });
 
-    // Checkbox and row click handlers
+    // Filter + selection helpers
+    const filterInput = card.querySelector('#playlist-filter-input');
+    const setRowSelected = (row, selected) => {
+      const idx = parseInt(row.getAttribute('data-idx'), 10);
+      const chk = row.querySelector('.playlist-chk');
+      if (chk) chk.checked = selected;
+      row.classList.toggle('selected', selected);
+      if (selected) selectedIndices.add(idx);
+      else selectedIndices.delete(idx);
+    };
+
+    const applyFilter = () => {
+      const query = (filterInput ? filterInput.value : '').trim().toLowerCase();
+      card.querySelectorAll('.playlist-video-row').forEach(row => {
+        const idx = parseInt(row.getAttribute('data-idx'), 10);
+        const title = String((entries[idx] && entries[idx].title) || '').toLowerCase();
+        row.style.display = (!query || title.includes(query)) ? '' : 'none';
+      });
+    };
+
+    if (filterInput) filterInput.addEventListener('input', applyFilter);
+
+    // Checkbox and row click handlers (Shift = range select)
     const listContainer = card.querySelector('#playlist-videos-container');
     listContainer.addEventListener('click', (e) => {
       const row = e.target.closest('.playlist-video-row');
       if (!row) return;
 
       const idx = parseInt(row.getAttribute('data-idx'), 10);
-      const chk = row.querySelector('.playlist-chk');
+      const willSelect = !selectedIndices.has(idx);
 
-      if (e.target !== chk) {
-        chk.checked = !chk.checked;
-      }
-
-      if (chk.checked) {
-        selectedIndices.add(idx);
-        row.classList.add('selected');
+      if (e.shiftKey && lastClickedIdx !== null) {
+        e.preventDefault();
+        const start = Math.min(lastClickedIdx, idx);
+        const end = Math.max(lastClickedIdx, idx);
+        card.querySelectorAll('.playlist-video-row').forEach(r => {
+          const rIdx = parseInt(r.getAttribute('data-idx'), 10);
+          if (rIdx >= start && rIdx <= end) setRowSelected(r, willSelect);
+        });
       } else {
-        selectedIndices.delete(idx);
-        row.classList.remove('selected');
+        setRowSelected(row, willSelect);
       }
+
+      lastClickedIdx = idx;
       updateSizeAndButton();
     });
 
-    // Select All
+    // Select All (only rows matching the current filter)
     card.querySelector('#btn-select-all').addEventListener('click', () => {
-      entries.forEach((_, i) => selectedIndices.add(i));
-      card.querySelectorAll('.playlist-chk').forEach(c => c.checked = true);
-      card.querySelectorAll('.playlist-video-row').forEach(r => r.classList.add('selected'));
+      card.querySelectorAll('.playlist-video-row').forEach(row => {
+        if (row.style.display !== 'none') setRowSelected(row, true);
+      });
       updateSizeAndButton();
     });
 
     // Deselect All
     card.querySelector('#btn-deselect-all').addEventListener('click', () => {
-      selectedIndices.clear();
-      card.querySelectorAll('.playlist-chk').forEach(c => c.checked = false);
-      card.querySelectorAll('.playlist-video-row').forEach(r => r.classList.remove('selected'));
+      card.querySelectorAll('.playlist-video-row').forEach(row => setRowSelected(row, false));
       updateSizeAndButton();
     });
+
+    // Reverse the download order
+    const reverseBtn = card.querySelector('#btn-reverse-order');
+    if (reverseBtn) {
+      reverseBtn.addEventListener('click', () => {
+        reverseOrder = !reverseOrder;
+        reverseBtn.textContent = reverseOrder ? 'Original order' : 'Reverse order';
+      });
+    }
 
     // Download Button Click
     card.querySelector('#btn-download-playlist-now').addEventListener('click', () => {
@@ -802,7 +885,9 @@ const Components = {
         Components.showToast('Please select at least one video to download.', 'error');
         return;
       }
-      const selectedEntries = entries.filter((_, i) => selectedIndices.has(i));
+      const orderedIndices = Array.from(selectedIndices).sort((a, b) => a - b);
+      if (reverseOrder) orderedIndices.reverse();
+      const selectedEntries = orderedIndices.map(i => entries[i]);
       let formatId = 'best';
       if (selectedQuality === '2160p' || selectedQuality === '4k') formatId = '2160p';
       else if (selectedQuality === '1440p') formatId = '1440p';

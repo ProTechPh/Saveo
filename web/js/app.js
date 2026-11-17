@@ -336,6 +336,7 @@ class SaveoApp {
       this.selectedMode = 'video';
       modeBtnVideo.classList.add('active');
       modeBtnAudio.classList.remove('active');
+      document.querySelectorAll('#advanced-formats-list .advanced-format-row').forEach(r => r.classList.remove('selected'));
       document.getElementById('video-formats-section').style.display = 'block';
       document.getElementById('audio-formats-section').style.display = 'none';
       const btnText = document.getElementById('btn-start-download-text');
@@ -360,6 +361,7 @@ class SaveoApp {
       this.selectedMode = 'audio';
       modeBtnAudio.classList.add('active');
       modeBtnVideo.classList.remove('active');
+      document.querySelectorAll('#advanced-formats-list .advanced-format-row').forEach(r => r.classList.remove('selected'));
       document.getElementById('video-formats-section').style.display = 'none';
       document.getElementById('audio-formats-section').style.display = 'block';
       const btnText = document.getElementById('btn-start-download-text');
@@ -842,6 +844,11 @@ class SaveoApp {
         this.selectedFormat = fmt;
       });
 
+      // Exact source streams (codec/fps/HDR/bitrate), desktop and web only.
+      Components.renderAdvancedFormats(data.advanced_formats || [], (fmt) => {
+        this.selectedFormat = fmt;
+      });
+
       // Show preview card
       document.getElementById('media-card').style.display = 'block';
 
@@ -915,8 +922,13 @@ class SaveoApp {
     if (!this.currentMedia) return;
 
     const isAudio = this.selectedMode === 'audio';
-    const formatId = this.selectedFormat ? this.selectedFormat.format_id : 'best';
-    const formatLabel = this.selectedFormat ? this.selectedFormat.label : 'Best Quality';
+    const advanced = Boolean(this.selectedFormat && this.selectedFormat.advanced);
+    let formatId = this.selectedFormat ? this.selectedFormat.format_id : 'best';
+    if (advanced && !this.selectedFormat.has_audio) {
+      formatId = `${this.selectedFormat.format_id}+bestaudio`;
+    }
+    const formatLabel = (this.selectedFormat ? this.selectedFormat.label : 'Best Quality')
+      + (advanced && !this.selectedFormat.has_audio ? ' + audio' : '');
     const audioCodec = isAudio && this.selectedFormat ? this.selectedFormat.ext : 'mp3';
     const outDir = document.getElementById('selected-save-dir').textContent.trim() || this.settings.download_dir;
 
@@ -1395,6 +1407,11 @@ class SaveoApp {
         const cookieBrowser = document.getElementById('setting-cookie-browser');
         const rateInput = document.getElementById('setting-rate-limit');
         const parsedRate = rateInput ? parseInt(rateInput.value, 10) : NaN;
+        const subsToggle = document.getElementById('setting-subtitles');
+        const subtitleLangs = document.getElementById('setting-subtitle-langs');
+        const subtitleMode = document.getElementById('setting-subtitle-mode');
+        const embedMeta = document.getElementById('setting-embed-metadata');
+        const embedThumb = document.getElementById('setting-embed-thumbnail');
         const activeThemeChip = document.querySelector('.theme-chip.active');
         const selectedTheme = (activeThemeChip ? activeThemeChip.getAttribute('data-theme') : null) || ThemeManager.currentTheme || 'dark';
 
@@ -1408,6 +1425,16 @@ class SaveoApp {
           fragment_concurrency: sliderFragments ? parseInt(sliderFragments.value, 10) : (this.settings.fragment_concurrency || 1),
           rate_limit_kbps: Number.isNaN(parsedRate) ? (this.settings.rate_limit_kbps || 0) : parsedRate,
           filename_template: (document.getElementById('setting-filename-template')?.value || '{title}').trim() || '{title}',
+          subtitles_enabled: subsToggle ? subsToggle.checked : Boolean(this.settings.subtitles_enabled),
+          subtitle_langs: (subtitleLangs ? subtitleLangs.value : (this.settings.subtitle_langs || 'en')).trim() || 'en',
+          subtitle_mode: subtitleMode ? subtitleMode.value : (this.settings.subtitle_mode || 'sidecar'),
+          embed_metadata: embedMeta ? embedMeta.checked : Boolean(this.settings.embed_metadata),
+          embed_thumbnail: embedThumb ? embedThumb.checked : Boolean(this.settings.embed_thumbnail),
+          schedule_enabled: document.getElementById('setting-schedule-enabled')
+            ? document.getElementById('setting-schedule-enabled').checked
+            : Boolean(this.settings.schedule_enabled),
+          schedule_start: (document.getElementById('setting-schedule-start')?.value || this.settings.schedule_start || '01:00'),
+          schedule_stop: (document.getElementById('setting-schedule-stop')?.value || this.settings.schedule_stop || '07:00'),
           notifications: notif ? notif.checked : (this.settings.notifications !== false),
           skip_duplicates: document.getElementById('setting-skip-duplicates')
             ? document.getElementById('setting-skip-duplicates').checked
@@ -1477,9 +1504,38 @@ class SaveoApp {
       const rateInput = document.getElementById('setting-rate-limit');
       if (rateInput) rateInput.value = this.settings.rate_limit_kbps || 0;
 
+      const subsToggle = document.getElementById('setting-subtitles');
+      if (subsToggle) subsToggle.checked = Boolean(this.settings.subtitles_enabled);
+      const subtitleLangs = document.getElementById('setting-subtitle-langs');
+      if (subtitleLangs) subtitleLangs.value = this.settings.subtitle_langs || 'en';
+      const subtitleMode = document.getElementById('setting-subtitle-mode');
+      if (subtitleMode) subtitleMode.value = this.settings.subtitle_mode || 'sidecar';
+      const embedMeta = document.getElementById('setting-embed-metadata');
+      if (embedMeta) embedMeta.checked = Boolean(this.settings.embed_metadata);
+      const embedThumb = document.getElementById('setting-embed-thumbnail');
+      if (embedThumb) embedThumb.checked = Boolean(this.settings.embed_thumbnail);
+
+      const scheduleToggle = document.getElementById('setting-schedule-enabled');
+      if (scheduleToggle) scheduleToggle.checked = Boolean(this.settings.schedule_enabled);
+      const scheduleStart = document.getElementById('setting-schedule-start');
+      if (scheduleStart) scheduleStart.value = this.settings.schedule_start || '01:00';
+      const scheduleStop = document.getElementById('setting-schedule-stop');
+      if (scheduleStop) scheduleStop.value = this.settings.schedule_stop || '07:00';
+
       // These shape the desktop yt-dlp engine; the Android engine has fixed defaults.
       if (typeof window.SaveoAndroid !== 'undefined') {
-        ['setting-rate-limit', 'setting-fragment-concurrency'].forEach(id => {
+        [
+          'setting-rate-limit',
+          'setting-fragment-concurrency',
+          'setting-subtitles',
+          'setting-subtitle-langs',
+          'setting-subtitle-mode',
+          'setting-embed-metadata',
+          'setting-embed-thumbnail',
+          'setting-schedule-enabled',
+          'setting-schedule-start',
+          'setting-schedule-stop',
+        ].forEach(id => {
           const el = document.getElementById(id);
           if (!el) return;
           const row = el.closest('.setting-item');

@@ -120,6 +120,27 @@ class TestSaveoCore(unittest.TestCase):
         self.assertFalse(task.is_paused())
         self.assertEqual(task.status, "cancelled")
 
+    def test_advanced_video_formats(self):
+        """Exact streams are exposed for the advanced picker, video-only flagged."""
+        provider = YtDlpProvider()
+        raw = [
+            {"format_id": "137", "height": 1080, "width": 1920, "fps": 30,
+             "vcodec": "avc1.640028", "acodec": "none", "ext": "mp4", "filesize": 1000, "tbr": 4000},
+            {"format_id": "18", "height": 360, "width": 640, "fps": 30,
+             "vcodec": "avc1.42001E", "acodec": "mp4a.40.2", "ext": "mp4", "filesize": 500, "tbr": 800},
+            {"format_id": "251", "height": 0, "vcodec": "none", "acodec": "opus", "ext": "webm"},
+        ]
+        advanced = provider._parse_advanced_formats(raw)
+        ids = [item["format_id"] for item in advanced]
+        self.assertEqual(ids[0], "137")
+        self.assertIn("18", ids)
+        self.assertNotIn("251", ids)
+
+        video_only = next(item for item in advanced if item["format_id"] == "137")
+        self.assertFalse(video_only["has_audio"])
+        self.assertIn("AVC1", video_only["label"])
+        self.assertIn("1080p", video_only["label"])
+
     def test_audio_format_distinct_sizes(self):
         """Test that distinct AAC and Opus streams yield distinct estimated sizes."""
         provider = YtDlpProvider()
@@ -177,6 +198,15 @@ class TestSaveoCore(unittest.TestCase):
         sm_reloaded.update({"fragment_concurrency": 99, "rate_limit_kbps": -100})
         self.assertEqual(sm_reloaded.get("fragment_concurrency"), 8)
         self.assertEqual(sm_reloaded.get("rate_limit_kbps"), 0)
+
+        sm_reloaded.update({"subtitle_langs": "en, fil<script>", "subtitle_mode": "weird"})
+        self.assertNotIn("<", sm_reloaded.get("subtitle_langs"))
+        self.assertEqual(sm_reloaded.get("subtitle_mode"), "sidecar")
+
+        sm_reloaded.update({"schedule_start": "99:99", "schedule_stop": "06:30", "schedule_enabled": 1})
+        self.assertEqual(sm_reloaded.get("schedule_start"), "01:00")
+        self.assertEqual(sm_reloaded.get("schedule_stop"), "06:30")
+        self.assertTrue(sm_reloaded.get("schedule_enabled"))
 
     def test_history_manager(self):
         """Test download history recording, listing, and deletion."""

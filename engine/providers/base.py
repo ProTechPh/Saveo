@@ -39,6 +39,7 @@ class MediaMetadata:
     description: str = ""
     formats: List[MediaFormat] = field(default_factory=list)
     audio_formats: List[MediaFormat] = field(default_factory=list)
+    advanced_formats: List[Dict[str, Any]] = field(default_factory=list)
     webpage_url: str = ""
     original_url: str = ""
     is_playlist: bool = False

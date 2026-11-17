@@ -17,6 +17,7 @@ from .providers.registry import registry
 from .settings_manager import settings_manager
 from .history_manager import history_manager
 from .file_manager import format_bytes, get_default_download_dir
+from .schedule import is_allowed_now
 
 
 class DownloadPausedException(Exception):
@@ -395,6 +396,13 @@ class QueueManager:
                 except (TypeError, ValueError):
                     max_concurrent = 3
                 max_concurrent = max(1, min(5, max_concurrent))
+
+                if not is_allowed_now(
+                    settings_manager.get("schedule_start", "01:00"),
+                    settings_manager.get("schedule_stop", "07:00"),
+                    bool(settings_manager.get("schedule_enabled", False)),
+                ):
+                    continue
 
                 with self._lock:
                     active_count = sum(1 for t in self.tasks.values() if t.status in ("downloading", "processing"))

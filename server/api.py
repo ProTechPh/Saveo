@@ -468,6 +468,7 @@ async def analyze_url(req: AnalyzeRequest):
                     "is_audio_only": f.is_audio_only
                 } for f in meta.audio_formats
             ],
+            "advanced_formats": getattr(meta, "advanced_formats", []),
             "default_download_dir": settings_manager.get("download_dir", get_default_download_dir())
         }
     except Exception as e:

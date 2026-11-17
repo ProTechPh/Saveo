@@ -105,6 +105,7 @@ if sys.platform == "win32":
         pass
 
 from server.api import app
+from server.single_instance import acquire_mutex, focus_existing_window, notify_already_running
 
 
 def get_resource_path(relative_path: str) -> str:
@@ -268,6 +269,13 @@ def main():
     parser.add_argument("--web", action="store_true", help="Launch in standard web browser instead of native window")
     parser.add_argument("--headless", action="store_true", help="Run server only without opening GUI or browser")
     args = parser.parse_args()
+
+    if not acquire_mutex():
+        if args.headless:
+            print("Saveo is already running.")
+        elif not focus_existing_window():
+            notify_already_running()
+        return
 
     splash = NativeSplashManager()
     close_splash() # Handover from PyInstaller boot splash to live progress splash

@@ -125,8 +125,13 @@ Smart error detection identifies country-level ISP blocks and geo-restrictions, 
 - **Restart-safe queue:** Queued and paused downloads are saved locally and resume from their partial file after relaunch.
 - **Bulk queue controls:** Pause all, resume all, and retry failed downloads from the queue header.
 - **Library actions:** Re-download a previous item in its original format, or delete the file from disk.
+- **Subtitles & tags:** Save subtitle tracks next to the video or embed them, plus title/author metadata and cover art when FFmpeg is available.
+- **Advanced formats:** Pick the exact source stream — codec, frame rate, HDR, bitrate, and container — with video-only streams paired to the best audio.
+- **Playlist tools:** Filter long lists, shift-click a range, select visible matches, and reverse the download order.
 - **Network controls:** Optional bandwidth limit and parallel-fragment downloads for faster or metered connections.
 - **Drag-and-drop links:** Drop one link into the input, or a list of links into the batch drawer.
+- **Single-instance guard:** Opening Saveo again focuses the existing window instead of starting a second engine.
+- **Off-peak scheduling:** Queued downloads can wait for a local-time window while active downloads keep running.
 - **In-app updates:** Check for new Saveo releases and view release notes directly inside the application.
 - **Engine maintenance:** Update the embedded yt-dlp core engine from within the application with a single click.
 - **Dynamic version synchronization:** Keeps the displayed application version synchronized with release tags.

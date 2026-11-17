@@ -5,6 +5,7 @@ import tempfile
 import types
 import unittest
 import os
+import sys
 import atexit
 from pathlib import Path
 from unittest.mock import patch
@@ -26,8 +27,11 @@ class Paused(Exception):
 class FakeYDL:
     """Calls the real progress hook once, then lets the stop signal propagate."""
 
+    last_opts = None
+
     def __init__(self, opts, output_dir):
         self.opts = opts
+        FakeYDL.last_opts = opts
         self.output_dir = Path(output_dir)
 
     def __enter__(self):
@@ -68,6 +72,8 @@ class TestYtdlpPartialCleanup(unittest.TestCase):
             YoutubeDL=lambda opts: FakeYDL(opts, self.temp_dir)
         )
         provider = YtDlpProvider()
+        # Pretend FFmpeg is available so postprocessor options are built deterministically.
+        provider.ffmpeg_path = sys.executable
         with patch.object(provider_module, "get_yt_dlp", return_value=fake_module):
             provider.download(
                 url="https://example.com/video",
@@ -95,6 +101,37 @@ class TestYtdlpPartialCleanup(unittest.TestCase):
         self.assertFalse((Path(self.temp_dir) / "Task.mp4").exists())
         self.assertFalse((Path(self.temp_dir) / "Task.mp4.part").exists())
         self.assertTrue((Path(self.temp_dir) / "Other.mp4.part").exists())
+
+    def test_subtitle_and_embed_options(self):
+        from engine.settings_manager import settings_manager
+        settings_manager.update({
+            "subtitles_enabled": True,
+            "subtitle_langs": "en, fil",
+            "subtitle_mode": "embed",
+            "embed_metadata": True,
+            "embed_thumbnail": True,
+        })
+        try:
+            with self.assertRaises(Exception):
+                self._run(lambda: True)
+        finally:
+            settings_manager.update({
+                "subtitles_enabled": False,
+                "subtitle_langs": "en",
+                "subtitle_mode": "sidecar",
+                "embed_metadata": False,
+                "embed_thumbnail": False,
+            })
+
+        opts = FakeYDL.last_opts
+        self.assertTrue(opts.get("writesubtitles"))
+        self.assertTrue(opts.get("writeautomaticsub"))
+        self.assertEqual(opts.get("subtitleslangs"), ["en", "fil"])
+        self.assertTrue(opts.get("writethumbnail"))
+        keys = [pp.get("key") for pp in opts.get("postprocessors", [])]
+        self.assertIn("FFmpegEmbedSubtitle", keys)
+        self.assertIn("FFmpegMetadata", keys)
+        self.assertIn("EmbedThumbnail", keys)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ Persists and manages user configurations in local config storage.
 
 import json
 import os
+import re
 import shutil
 import threading
 from pathlib import Path
@@ -39,6 +40,14 @@ class SettingsManager:
             "filename_template": "{title}",
             "notifications": True,
             "skip_duplicates": True,
+            "subtitles_enabled": False,
+            "subtitle_langs": "en",
+            "subtitle_mode": "sidecar",
+            "embed_metadata": False,
+            "embed_thumbnail": False,
+            "schedule_enabled": False,
+            "schedule_start": "01:00",
+            "schedule_stop": "07:00",
             "cookie_file": "",
             "cookie_browser": "none",
         }
@@ -94,6 +103,20 @@ class SettingsManager:
                 updates["rate_limit_kbps"] = max(0, min(1_000_000, int(updates["rate_limit_kbps"])))
             except (TypeError, ValueError):
                 updates.pop("rate_limit_kbps", None)
+        if "subtitle_mode" in updates and updates.get("subtitle_mode") not in ("sidecar", "embed"):
+            updates["subtitle_mode"] = "sidecar"
+        if "subtitle_langs" in updates:
+            langs = re.sub(r"[^A-Za-z0-9,._\- ]", "", str(updates.get("subtitle_langs") or ""))[:200].strip()
+            updates["subtitle_langs"] = langs or "en"
+        for flag in ("subtitles_enabled", "embed_metadata", "embed_thumbnail"):
+            if flag in updates:
+                updates[flag] = bool(updates[flag])
+        if "schedule_enabled" in updates:
+            updates["schedule_enabled"] = bool(updates["schedule_enabled"])
+        for key, fallback in (("schedule_start", "01:00"), ("schedule_stop", "07:00")):
+            if key in updates:
+                value = str(updates.get(key) or "").strip()
+                updates[key] = value if re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", value) else fallback
         with self._lock:
             self._settings.update(updates)
             self._save(self._settings)

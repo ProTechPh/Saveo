@@ -297,6 +297,10 @@
                   <div class="formats-chip-grid saveo-quality-chips-grid" id="video-formats-grid">
                     <!-- Populated dynamically with actual qualities returned by source -->
                   </div>
+                  <details class="advanced-formats" id="advanced-formats-wrap" style="display: none;">
+                    <summary>Advanced formats (<span id="advanced-format-count">0</span>)</summary>
+                    <div class="advanced-formats-list" id="advanced-formats-list"></div>
+                  </details>
                 </div>
 
                 <div class="format-selection-wrap" id="audio-formats-section" style="display: none;">
@@ -614,7 +618,41 @@
                 </div>
               </div>
 
-              <!-- 7. Filename Template -->
+              <!-- 7. Off-Peak Scheduling -->
+              <div class="setting-item setting-item-toggle">
+                <div class="setting-info">
+                  <label>Off-Peak Scheduling</label>
+                  <span>Only start queued downloads inside this window. Active downloads are never interrupted.</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-schedule-enabled" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Start Downloads At</label>
+                  <span>24-hour local time. Overnight windows are supported.</span>
+                </div>
+                <div class="setting-control">
+                  <input type="time" id="setting-schedule-start" class="text-input" step="60" style="max-width: 140px;" />
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Stop Starting Downloads At</label>
+                  <span>A download that already started keeps going.</span>
+                </div>
+                <div class="setting-control">
+                  <input type="time" id="setting-schedule-stop" class="text-input" step="60" style="max-width: 140px;" />
+                </div>
+              </div>
+
+              <!-- 8. Filename Template -->
               <div class="setting-item">
                 <div class="setting-info">
                   <label>Filename Template</label>
@@ -625,7 +663,70 @@
                 </div>
               </div>
 
-              <!-- 6. Theme Selector -->
+              <!-- 8. Subtitles -->
+              <div class="setting-item setting-item-toggle">
+                <div class="setting-info">
+                  <label>Download Subtitles</label>
+                  <span>Save available subtitles, including auto-generated tracks when the source provides them.</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-subtitles" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Subtitle Languages</label>
+                  <span>Comma-separated codes, e.g. <code>en, fil</code>, or <code>all</code>.</span>
+                </div>
+                <div class="setting-control dir-setting-control">
+                  <input type="text" id="setting-subtitle-langs" class="text-input" placeholder="en" maxlength="200" />
+                </div>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label>Subtitle Handling</label>
+                  <span>Embedding needs FFmpeg; otherwise subtitles are saved next to the video.</span>
+                </div>
+                <div class="setting-control">
+                  <select id="setting-subtitle-mode" class="custom-select">
+                    <option value="sidecar">Save as separate subtitle files</option>
+                    <option value="embed">Embed into the video (FFmpeg)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="setting-item setting-item-toggle">
+                <div class="setting-info">
+                  <label>Embed Metadata</label>
+                  <span>Write title, author, and source tags into the file (FFmpeg).</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-embed-metadata" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-item setting-item-toggle">
+                <div class="setting-info">
+                  <label>Embed Cover Art</label>
+                  <span>Embed the source thumbnail when FFmpeg is available.</span>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="setting-embed-thumbnail" />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- 9. Theme Selector -->
               <div class="setting-item">
                 <div class="setting-info">
                   <label>Application Theme</label>
